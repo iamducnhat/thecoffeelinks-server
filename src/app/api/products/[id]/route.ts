@@ -49,9 +49,7 @@ export async function PUT(
         const { id } = await params;
         const body = await request.json();
 
-        const updateData: any = {
-            updated_at: new Date().toISOString(),
-        };
+        const updateData: any = {};
 
         // Only update provided fields
         if (body.name !== undefined) updateData.name = body.name;
