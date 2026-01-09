@@ -6,7 +6,7 @@ export async function GET() {
     try {
         const { data: events, error } = await supabaseAdmin
             .from('events')
-            .select('*')
+            .select('id, type, title, subtitle, bg, icon, is_active')
             .eq('is_active', true)
             .order('created_at', { ascending: true });
 
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
         const { data: event, error } = await supabaseAdmin
             .from('events')
             .insert(newEvent)
-            .select()
+            .select('id, type, title, subtitle, bg, icon, is_active')
             .single();
 
         if (error) {
