@@ -10,7 +10,7 @@ export async function GET(request: Request) {
         // Build query
         let query = supabaseAdmin
             .from('products')
-            .select('id, name, description, base_price, category, image, is_popular, is_new, is_available');
+            .select('id, name, description, base_price, category, is_popular, is_new, is_available');
 
         // Filter by category if provided
         if (category && category !== 'all') {
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
             description: body.description,
             base_price: body.basePrice,
             category: body.category,
-            image: body.image || '/images/default.jpg',
+            // image: body.image || '/images/default.jpg', // Column missing in DB
             is_popular: body.isPopular || false,
             is_new: body.isNew || false,
             is_available: body.isAvailable !== false,
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
         const { data: product, error } = await supabaseAdmin
             .from('products')
             .insert(newProduct)
-            .select('id, name, description, base_price, category, image, is_popular, is_new, is_available')
+            .select('id, name, description, base_price, category, is_popular, is_new, is_available')
             .single();
 
         if (error) {
@@ -119,7 +119,7 @@ export async function POST(request: Request) {
             description: product.description,
             basePrice: Number(product.base_price),
             category: product.category,
-            image: product.image,
+            image: '/images/default.jpg', // Default fallback as DB column is missing
             isPopular: product.is_popular,
             isNew: product.is_new,
         };
