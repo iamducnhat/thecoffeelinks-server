@@ -83,7 +83,7 @@ export async function PUT(
             image: product.image || '/images/default.jpg',
             isPopular: product.is_popular,
             isNew: product.is_new,
-            isAvailable: product.is_available ?? product.is_active,
+            isAvailable: product.is_available,
         };
 
         return NextResponse.json({ success: true, product: transformedProduct });
