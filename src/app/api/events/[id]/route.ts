@@ -11,7 +11,7 @@ export async function GET(
 
         const { data: event, error } = await supabaseAdmin
             .from('events')
-            .select('id, type, title, subtitle, bg, icon, is_active')
+            .select('*')
             .eq('id', parseInt(id))
             .single();
 
@@ -47,7 +47,9 @@ export async function PUT(
         const { id } = await params;
         const body = await request.json();
 
-        const updateData: any = {};
+        const updateData: any = {
+            updated_at: new Date().toISOString(),
+        };
 
         // Only update provided fields
         if (body.type !== undefined) updateData.type = body.type;
@@ -61,7 +63,7 @@ export async function PUT(
             .from('events')
             .update(updateData)
             .eq('id', parseInt(id))
-            .select('id, type, title, subtitle, bg, icon, is_active')
+            .select()
             .single();
 
         if (error) {

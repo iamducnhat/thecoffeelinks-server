@@ -10,7 +10,7 @@ export async function GET(request: Request) {
         // Build query
         let query = supabaseAdmin
             .from('products')
-            .select('id, name, description, base_price, category, image, is_popular, is_new, is_available');
+            .select('*');
 
         // Filter by category if provided
         if (category && category !== 'all') {
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
         const { data: product, error } = await supabaseAdmin
             .from('products')
             .insert(newProduct)
-            .select('id, name, description, base_price, category, image, is_popular, is_new, is_available')
+            .select()
             .single();
 
         if (error) {
