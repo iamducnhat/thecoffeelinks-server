@@ -8,14 +8,23 @@ export async function POST(request: Request) {
     try {
         const body = await request.json();
 
-        // Decrypt the request body
-        const decryptedData = decrypt(body.data);
+        let email: string;
+        let password: string;
 
-        if (!decryptedData) {
-            return NextResponse.json({ error: 'Invalid encrypted data' }, { status: 400 });
+        // Support both encrypted and non-encrypted requests
+        if (body.data) {
+            // Encrypted request: { data: encryptedString }
+            const decryptedData = decrypt(body.data);
+            if (!decryptedData) {
+                return NextResponse.json({ error: 'Invalid encrypted data' }, { status: 400 });
+            }
+            email = decryptedData.email;
+            password = decryptedData.password;
+        } else {
+            // Plain request: { email, password }
+            email = body.email;
+            password = body.password;
         }
-
-        const { email, password } = decryptedData;
 
         if (!email || !password) {
             return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
