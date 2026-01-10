@@ -1,10 +1,21 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
+// Import encryption utils
+import { encrypt, decrypt } from '@/lib/encryption';
+
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { email, password } = body;
+
+        // Decrypt the request body
+        const decryptedData = decrypt(body.data);
+
+        if (!decryptedData) {
+            return NextResponse.json({ error: 'Invalid encrypted data' }, { status: 400 });
+        }
+
+        const { email, password } = decryptedData;
 
         if (!email || !password) {
             return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
@@ -22,11 +33,16 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: error.message }, { status: 401 });
         }
 
-        // Return the session to the client
-        return NextResponse.json({
+        // Encrypt the response
+        const encryptedResponse = encrypt({
             success: true,
             session: data.session,
             user: data.user
+        });
+
+        // Return the encrypted session to the client
+        return NextResponse.json({
+            data: encryptedResponse
         });
 
     } catch (error: any) {
