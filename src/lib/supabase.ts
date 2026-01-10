@@ -7,4 +7,10 @@ if (!supabaseUrl || !supabaseServiceKey) {
     console.warn('Missing Supabase environment variables in server.')
 }
 
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
+// Service role client - bypasses RLS
+export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+        autoRefreshToken: false,
+        persistSession: false
+    }
+})
