@@ -18,7 +18,7 @@ export async function POST(request: Request) {
                 user_id: user_id || null,
                 status: 'placed',
                 total_amount: total,
-                type: deliveryOption === 'delivery' ? 'delivery' : (deliveryOption === 'take-away' ? 'take_away' : 'dine_in'),
+                type: (deliveryOption === 'delivery' || deliveryOption === 'take-away') ? 'take_away' : 'dine_in',
                 payment_method: 'cash',
                 store_id: body.storeId || null,
                 delivery_address: body.deliveryAddress || null,
