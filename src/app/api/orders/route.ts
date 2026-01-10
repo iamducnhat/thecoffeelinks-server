@@ -18,8 +18,13 @@ export async function POST(request: Request) {
                 user_id: user_id || null,
                 status: 'placed',
                 total_amount: total,
-                type: deliveryOption === 'take-away' ? 'take_away' : 'dine_in',
-                payment_method: 'cash', // Defaulting to cash as per plan, can be updated to read from body later
+                type: deliveryOption === 'delivery' ? 'delivery' : (deliveryOption === 'take-away' ? 'take_away' : 'dine_in'),
+                payment_method: 'cash',
+                store_id: body.storeId || null,
+                delivery_address: body.deliveryAddress || null,
+                delivery_latitude: body.deliveryLat || null,
+                delivery_longitude: body.deliveryLng || null,
+                delivery_notes: body.deliveryNotes || null,
             })
             .select()
             .single();
