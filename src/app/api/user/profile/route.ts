@@ -18,13 +18,45 @@ export async function GET(request: Request) {
         const userId = authData.user.id;
 
         // Fetch User Profile
-        const { data: userData, error: userError } = await supabaseAdmin
+        let { data: userData, error: userError } = await supabaseAdmin
             .from('users')
             .select('*')
             .eq('id', userId)
             .single();
 
-        if (userError) {
+        // If profile doesn't exist but auth user does, create the profile
+        if (userError && userError.code === 'PGRST116') {
+            // User exists in auth but not in users table - create profile
+            const { data: newProfile, error: createError } = await supabaseAdmin
+                .from('users')
+                .insert({
+                    id: userId,
+                    email: authData.user.email,
+                    name: authData.user.user_metadata?.full_name || authData.user.email?.split('@')[0] || 'User',
+                    phone: '',
+                    points: 50, // Welcome bonus
+                    total_points_earned: 50,
+                    member_since: new Date().toISOString(),
+                })
+                .select()
+                .single();
+
+            if (createError) {
+                console.error('Auto-create profile error:', createError);
+                return NextResponse.json({ error: 'Failed to create profile' }, { status: 500 });
+            }
+
+            // Add Welcome Points to history
+            await supabaseAdmin.from('points_history').insert({
+                user_id: userId,
+                type: 'earned',
+                points: 50,
+                description: 'Welcome Bonus',
+            });
+
+            userData = newProfile;
+            userError = null;
+        } else if (userError) {
             console.error('Fetch profile error:', userError);
             return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 });
         }
