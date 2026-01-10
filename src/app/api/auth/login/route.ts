@@ -10,10 +10,12 @@ export async function POST(request: Request) {
 
         let email: string;
         let password: string;
+        let isEncryptedRequest = false;
 
         // Support both encrypted and non-encrypted requests
         if (body.data) {
             // Encrypted request: { data: encryptedString }
+            isEncryptedRequest = true;
             const decryptedData = decrypt(body.data);
             if (!decryptedData) {
                 return NextResponse.json({ error: 'Invalid encrypted data' }, { status: 400 });
@@ -42,17 +44,21 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: error.message }, { status: 401 });
         }
 
-        // Encrypt the response
-        const encryptedResponse = encrypt({
+        const responseData = {
             success: true,
             session: data.session,
             user: data.user
-        });
+        };
 
-        // Return the encrypted session to the client
-        return NextResponse.json({
-            data: encryptedResponse
-        });
+        // Return encrypted response for encrypted requests, plain for plain requests
+        if (isEncryptedRequest) {
+            return NextResponse.json({
+                data: encrypt(responseData)
+            });
+        } else {
+            // Plain response for clients that don't use encryption
+            return NextResponse.json(responseData);
+        }
 
     } catch (error: any) {
         console.error('Login error:', error);
