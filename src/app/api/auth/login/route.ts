@@ -4,33 +4,31 @@ import { supabaseAdmin } from '@/lib/supabase';
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { phone, name } = body;
+        const { email, password } = body;
 
-        if (!phone || !name) {
-            return NextResponse.json({ error: 'Phone and name are required' }, { status: 400 });
+        if (!email || !password) {
+            return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
         }
 
-        // Upsert user based on phone number
-        const { data: user, error } = await supabaseAdmin
-            .from('users')
-            .upsert({
-                phone,
-                role: 'customer',
-                // We typically don't update points on login, but we need to ensure the record exists
-            }, { onConflict: 'phone' })
-            .select()
-            .single();
+        // Use signInWithPassword. 
+        // Note: supabaseAdmin has service role, but acts generally. 
+        // For distinct user login, we might want a clean client or just use the returned session.
+        const { data, error } = await supabaseAdmin.auth.signInWithPassword({
+            email,
+            password
+        });
 
         if (error) {
-            console.error('User upsert error:', error);
-            // If error is duplicate key (should be handled by upsert, but just in case)
-            return NextResponse.json({ error: error.message }, { status: 500 });
+            return NextResponse.json({ error: error.message }, { status: 401 });
         }
 
-        // If this is a new user (or existing), we might want to ensure they have a social profile or just return the ID
-        // For now, returning the user object is sufficient.
+        // Return the session to the client
+        return NextResponse.json({
+            success: true,
+            session: data.session,
+            user: data.user
+        });
 
-        return NextResponse.json({ success: true, user });
     } catch (error: any) {
         console.error('Login error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
