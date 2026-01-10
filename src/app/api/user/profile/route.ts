@@ -33,7 +33,6 @@ export async function GET(request: Request) {
                     id: userId,
                     email: authData.user.email,
                     name: authData.user.user_metadata?.full_name || authData.user.email?.split('@')[0] || 'User',
-                    phone: '',
                     points: 50, // Welcome bonus
                     total_points_earned: 50,
                     member_since: new Date().toISOString(),

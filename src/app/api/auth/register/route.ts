@@ -33,7 +33,6 @@ export async function POST(request: Request) {
                 id: data.user.id,
                 email: email,
                 name: name,
-                phone: '', // Default empty phone
                 points: 50, // Welcome bonus
                 total_points_earned: 50,
                 member_since: new Date().toISOString(),
