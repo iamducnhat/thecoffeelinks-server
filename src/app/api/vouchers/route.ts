@@ -18,12 +18,12 @@ export async function GET() {
         // Transform to frontend format
         const transformedVouchers = vouchers?.map((v: any) => ({
             code: v.code,
-            discountPercent: v.discount_percent,
+            discount_percent: v.discount_percent,
             discount: v.discount_amount,
             description: v.description,
-            minOrder: v.min_order,
-            maxDiscount: v.max_discount,
-            isActive: v.is_active,
+            min_order: v.min_order,
+            max_discount: v.max_discount,
+            is_active: v.is_active,
         })) || [];
 
         return NextResponse.json({ vouchers: transformedVouchers });

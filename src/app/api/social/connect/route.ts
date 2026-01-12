@@ -1,6 +1,25 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
+// GET: Fetch people here now
+export async function GET() {
+    try {
+        const { data: checkIns, error } = await supabaseAdmin
+            .from('check_ins')
+            .select('*, user:users(*)')
+            .order('checked_in_at', { ascending: false })
+            .limit(20);
+
+        if (error) {
+            return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+
+        return NextResponse.json({ checkIns: checkIns || [] });
+    } catch (error: any) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+}
+
 // POST: Connect with another user
 export async function POST(request: Request) {
     try {

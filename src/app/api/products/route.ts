@@ -54,12 +54,12 @@ export async function GET(request: Request) {
             id: p.id,
             name: p.name,
             description: p.description,
-            basePrice: Number(p.base_price),
+            base_price: Number(p.base_price),
             category: p.category,
             image: p.image || '/images/default.jpg',
-            isPopular: p.is_popular,
-            isNew: p.is_new,
-            isAvailable: p.is_available,
+            is_popular: p.is_popular,
+            is_new: p.is_new,
+            is_available: p.is_available,
         })) || [];
 
         // Transform toppings
@@ -72,7 +72,7 @@ export async function GET(request: Request) {
         return NextResponse.json({
             products: transformedProducts,
             toppings: transformedToppings,
-            sizeModifiers: Object.keys(sizeModifiers).length > 0 ? sizeModifiers : {
+            size_modifiers: Object.keys(sizeModifiers).length > 0 ? sizeModifiers : {
                 'S': { price: 0, label: 'Small' },
                 'M': { price: 10000, label: 'Medium' },
                 'L': { price: 20000, label: 'Large' },

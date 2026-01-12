@@ -1,17 +1,42 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
+/**
+ * POST /api/orders
+ * 
+ * Create a new order. Requires payment verification token.
+ * 
+ * TODO: Validate payment token against stored payment records
+ * TODO: Check payment token expiry
+ */
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { items, deliveryOption, total, user_id } = body;
+        const { items, deliveryOption, total, user_id, paymentToken, paymentMethod } = body;
 
         // Basic validation
         if (!items || items.length === 0) {
             return NextResponse.json({ error: 'No items in order' }, { status: 400 });
         }
 
-        // Insert Order
+        // Payment verification check
+        // TODO: In production, validate token against stored payment records
+        if (!paymentToken) {
+            return NextResponse.json(
+                { error: 'Payment verification required. Please complete payment first.' },
+                { status: 402 } // Payment Required
+            );
+        }
+
+        // Validate payment token format (prototype check)
+        if (!paymentToken.startsWith('PAY_')) {
+            return NextResponse.json(
+                { error: 'Invalid payment token' },
+                { status: 400 }
+            );
+        }
+
+        // Insert Order with payment info
         const { data: order, error: orderError } = await supabaseAdmin
             .from('orders')
             .insert({
@@ -19,7 +44,9 @@ export async function POST(request: Request) {
                 status: 'placed',
                 total_amount: total,
                 type: (deliveryOption === 'delivery' || deliveryOption === 'take-away') ? 'take_away' : 'dine_in',
-                payment_method: 'cash',
+                payment_method: paymentMethod || 'cash',
+                payment_status: 'paid', // Payment verified before order creation
+                payment_token: paymentToken,
                 store_id: body.storeId || null,
                 delivery_address: body.deliveryAddress || null,
                 delivery_latitude: body.deliveryLat || null,
