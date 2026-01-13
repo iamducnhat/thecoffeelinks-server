@@ -23,7 +23,8 @@ export async function GET(request: Request) {
                 image, 
                 is_popular, 
                 is_new, 
-                is_available
+                is_available,
+                size_options
             `);
 
         // Filter by category if provided
@@ -49,7 +50,8 @@ export async function GET(request: Request) {
                         image, 
                         is_popular, 
                         is_new, 
-                        is_available
+                        is_available,
+                        size_options
                     `)
                     .eq('categories.name', category);
             }
@@ -102,6 +104,7 @@ export async function GET(request: Request) {
                 is_popular: p.is_popular,
                 is_new: p.is_new,
                 is_available: p.is_available,
+                sizeOptions: p.size_options || {small: {enabled: false, price: 0}, medium: {enabled: true, price: 65000}, large: {enabled: true, price: 69000}},
             };
         }) || [];
 
@@ -175,13 +178,12 @@ export async function POST(request: Request) {
             name: body.name.trim(),
             description: body.description?.trim() || null,
             base_price: body.basePrice || 0,
-            category_id: body.categoryId, // Ensure this is provided
+            category_id: body.categoryId,
             image: body.image || null,
             is_popular: body.isPopular || false,
             is_new: body.isNew || false,
-            // category field is deprecated/redundant but we might want to fill it for now if constraint allows null or default
-            // Ignoring 'category' text column as we move to 'category_id'
             is_available: body.isAvailable !== false,
+            size_options: body.sizeOptions || {small: {enabled: false, price: 0}, medium: {enabled: true, price: 65000}, large: {enabled: true, price: 69000}},
         };
 
         const { data: product, error } = await supabaseAdmin
@@ -197,7 +199,8 @@ export async function POST(request: Request) {
                 image, 
                 is_popular, 
                 is_new, 
-                is_available
+                is_available,
+                size_options
             `)
             .single();
 
@@ -219,6 +222,7 @@ export async function POST(request: Request) {
             image: product.image || null,
             isPopular: product.is_popular,
             isNew: product.is_new,
+            sizeOptions: product.size_options || {small: {enabled: false, price: 0}, medium: {enabled: true, price: 65000}, large: {enabled: true, price: 69000}},
         };
 
         return NextResponse.json({ success: true, product: transformedProduct });

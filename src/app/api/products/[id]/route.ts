@@ -85,16 +85,18 @@ export async function PUT(
         if (body.description !== undefined) updateData.description = body.description;
         if (body.basePrice !== undefined) updateData.base_price = body.basePrice;
         if (body.category !== undefined) updateData.category = body.category;
+        if (body.categoryId !== undefined) updateData.category_id = body.categoryId;
         if (body.image !== undefined) updateData.image = body.image;
         if (body.isPopular !== undefined) updateData.is_popular = body.isPopular;
         if (body.isNew !== undefined) updateData.is_new = body.isNew;
         if (body.isAvailable !== undefined) updateData.is_available = body.isAvailable;
+        if (body.sizeOptions !== undefined) updateData.size_options = body.sizeOptions;
 
         const { data: product, error } = await supabaseAdmin
             .from('products')
             .update(updateData)
             .eq('id', id)
-            .select('id, name, description, base_price, category, image, is_popular, is_new, is_available')
+            .select('id, name, description, base_price, category, category_id, image, is_popular, is_new, is_available, size_options')
             .single();
 
         if (error) {
@@ -109,10 +111,12 @@ export async function PUT(
             description: product.description,
             basePrice: Number(product.base_price),
             category: product.category,
+            categoryId: product.category_id,
             image: product.image || null,
             isPopular: product.is_popular,
             isNew: product.is_new,
             isAvailable: product.is_available,
+            sizeOptions: product.size_options || {small: {enabled: false, price: 0}, medium: {enabled: true, price: 65000}, large: {enabled: true, price: 69000}},
         };
 
         return NextResponse.json({ success: true, product: transformedProduct });
