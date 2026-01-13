@@ -29,7 +29,7 @@ export async function POST(request: Request) {
 
         // Convert file to buffer
         const arrayBuffer = await file.arrayBuffer();
-        let buffer = Buffer.from(arrayBuffer);
+        let buffer: Buffer = Buffer.from(new Uint8Array(arrayBuffer));
 
         // Build processing options
         const processingOptions: ImageProcessingOptions = {};

@@ -22,15 +22,15 @@ export interface ImageProcessingOptions {
 
 /**
  * Process an image with various transformations
- * @param buffer - The input image buffer
+ * @param input - The input image buffer or Uint8Array
  * @param options - Processing options (crop, resize, quality, format)
  * @returns Processed image buffer
  */
 export async function processImage(
-    buffer: Buffer,
+    input: Buffer | Uint8Array,
     options: ImageProcessingOptions = {}
 ): Promise<Buffer> {
-    let image = sharp(buffer);
+    let image = sharp(input);
 
     // Get metadata for validation
     const metadata = await image.metadata();
@@ -89,11 +89,11 @@ export async function processImage(
  * Optimize image for web (resize to max dimensions and compress)
  */
 export async function optimizeForWeb(
-    buffer: Buffer,
+    input: Buffer | Uint8Array,
     maxWidth: number = 1920,
     maxHeight: number = 1920
 ): Promise<Buffer> {
-    return processImage(buffer, {
+    return processImage(input, {
         resize: {
             width: maxWidth,
             height: maxHeight,
@@ -108,11 +108,11 @@ export async function optimizeForWeb(
  * Create a thumbnail from an image
  */
 export async function createThumbnail(
-    buffer: Buffer,
+    input: Buffer | Uint8Array,
     width: number = 300,
     height: number = 300
 ): Promise<Buffer> {
-    return processImage(buffer, {
+    return processImage(input, {
         resize: {
             width,
             height,

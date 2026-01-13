@@ -1,6 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Enable sharp for image processing on Vercel
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
+  },
+  // External packages that need native binaries
+  serverExternalPackages: ['sharp'],
   async headers() {
     return [
       {
