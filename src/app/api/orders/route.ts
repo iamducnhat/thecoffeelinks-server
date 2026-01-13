@@ -43,22 +43,32 @@ export async function POST(request: Request) {
         // Prompt says "Payment Method: card | apple_pay | points".
         // We will default status to 'received' (prompt) which maps to 'placed' or 'received' in DB.
 
+        // Validate delivery address is required for delivery orders
+        if (type === 'delivery' && !deliveryAddress) {
+            return NextResponse.json({ error: 'Delivery address is required for delivery orders' }, { status: 400 });
+        }
+
+        // Build order data - only include optional fields if they have values
+        const orderData: Record<string, any> = {
+            user_id: user_id || null,
+            status: 'received',
+            total_amount: total_amount || total || 0,
+            type: type,
+            payment_method: payment_method || paymentMethod || 'cash',
+            payment_status: 'pending',
+            store_id: body.storeId || null,
+            table_id: table_id || null,
+            voucher_id: voucher_id || null
+        };
+
+        // Add optional fields only if they exist (avoids column not found errors)
+        if (body.deliveryNotes) orderData.notes = body.deliveryNotes;
+        if (deliveryAddress) orderData.delivery_address = deliveryAddress;
+
         // Insert Order
         const { data: order, error: orderError } = await supabaseAdmin
             .from('orders')
-            .insert({
-                user_id: user_id || null,
-                status: 'received',
-                total_amount: total_amount || total || 0,
-                type: type,
-                payment_method: payment_method || paymentMethod || 'cash',
-                payment_status: 'pending',
-                store_id: body.storeId || null,
-                table_id: table_id || null,
-                voucher_id: voucher_id || null,
-                notes: body.deliveryNotes || null,
-                delivery_address: deliveryAddress || null
-            })
+            .insert(orderData)
             .select()
             .single();
 
