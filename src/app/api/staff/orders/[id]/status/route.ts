@@ -15,7 +15,7 @@ export async function POST(
             return NextResponse.json({ error: 'Status is required' }, { status: 400 });
         }
 
-        const validStatuses = ['received', 'preparing', 'ready', 'completed', 'cancelled'];
+        const validStatuses = ['placed', 'received', 'preparing', 'ready', 'completed', 'cancelled'];
         if (!validStatuses.includes(status)) {
             return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
         }

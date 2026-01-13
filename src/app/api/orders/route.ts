@@ -112,8 +112,8 @@ export async function PATCH(request: Request) {
             return NextResponse.json({ error: 'orderId and status are required' }, { status: 400 });
         }
 
-        // Actual database enum: 'placed', 'ready', 'completed', 'cancelled'
-        const validStatuses = ['placed', 'ready', 'completed', 'cancelled'];
+        // Actual database enum often includes: 'placed', 'received', 'preparing', 'ready', 'completed', 'cancelled'
+        const validStatuses = ['placed', 'received', 'preparing', 'ready', 'completed', 'cancelled'];
         if (!validStatuses.includes(status)) {
             return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
         }
