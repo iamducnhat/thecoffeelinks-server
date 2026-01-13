@@ -1,21 +1,23 @@
 import { NextResponse } from 'next/server';
-import { encrypt, decrypt } from '@/lib/encryption';
+import { decrypt } from '@/lib/encryption';
 
 export async function POST(request: Request) {
     try {
         const body = await request.json();
 
-        // Decrypt the request body
+        // Decrypt the request body using server's ENCRYPTION_KEY
         const decryptedData = decrypt(body.data);
 
         if (!decryptedData) {
-            return NextResponse.json({ error: 'Invalid encrypted data' }, { status: 400 });
+            return NextResponse.json({ 
+                error: 'Invalid secret key or corrupted data' 
+            }, { status: 400 });
         }
 
         const { email, password } = decryptedData;
 
         if (!email || !password) {
-            return NextResponse.json({ error: 'Username and password are required' }, { status: 400 });
+            return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
         }
 
         // Check against admin environment variables
@@ -29,15 +31,11 @@ export async function POST(request: Request) {
         }
 
         if (email === envUsername && password === envPassword) {
-            // Encrypt the success response
-            const encryptedResponse = encrypt({
+            // Return plain response - HTTPS provides encryption in transit
+            return NextResponse.json({
                 success: true,
                 token: envSecret,
                 user: { username: email, role: 'admin' }
-            });
-
-            return NextResponse.json({
-                data: encryptedResponse
             });
         }
 
