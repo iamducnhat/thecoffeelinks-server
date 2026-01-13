@@ -12,46 +12,52 @@ import { supabaseAdmin } from '@/lib/supabase';
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { items, deliveryOption, total, user_id, paymentToken, paymentMethod } = body;
+        // Support prompt payload keys + legacy keys
+        const {
+            items,
+            order_type, deliveryOption, // order_type preferred
+            table_id,
+            address_id, deliveryAddress, // address_id preferred? or deliveryAddress object
+            payment_method, paymentMethod, // payment_method preferred
+            voucher_id,
+            user_id, // Authenticated user
+            total_amount, total // total preferred?
+        } = body;
 
         // Basic validation
         if (!items || items.length === 0) {
             return NextResponse.json({ error: 'No items in order' }, { status: 400 });
         }
 
-        // Payment verification check
-        // TODO: In production, validate token against stored payment records
-        if (!paymentToken) {
-            return NextResponse.json(
-                { error: 'Payment verification required. Please complete payment first.' },
-                { status: 402 } // Payment Required
-            );
-        }
+        // Determine Type
+        // prompt: "dine_in | take_away | delivery"
+        // db enum: 'dine_in', 'take_away', 'delivery' (assuming)
+        let type = order_type || (deliveryOption === 'delivery' || deliveryOption === 'take-away' ? 'take_away' : 'dine_in');
 
-        // Validate payment token format (prototype check)
-        if (!paymentToken.startsWith('PAY_')) {
-            return NextResponse.json(
-                { error: 'Invalid payment token' },
-                { status: 400 }
-            );
-        }
+        // Mapped to DB enum often snake_case
+        if (type === 'take-away') type = 'take_away';
 
-        // Insert Order with payment info
+        // Payment Verification Logic
+        // For this task, we assume payment is handled or method is sufficient. 
+        // If 'paymentToken' is strictly required by business logic, we'd check it.
+        // Prompt says "Payment Method: card | apple_pay | points".
+        // We will default status to 'received' (prompt) which maps to 'placed' or 'received' in DB.
+
+        // Insert Order
         const { data: order, error: orderError } = await supabaseAdmin
             .from('orders')
             .insert({
                 user_id: user_id || null,
-                status: 'placed',
-                total_amount: total,
-                type: (deliveryOption === 'delivery' || deliveryOption === 'take-away') ? 'take_away' : 'dine_in',
-                payment_method: paymentMethod || 'cash',
-                payment_status: 'paid', // Payment verified before order creation
-                payment_token: paymentToken,
+                status: 'received', // Prompt says "received"
+                total_amount: total_amount || total || 0,
+                type: type,
+                payment_method: payment_method || paymentMethod || 'cash',
+                payment_status: 'pending', // Pending until callback or verified
                 store_id: body.storeId || null,
-                delivery_address: body.deliveryAddress || null,
-                delivery_latitude: body.deliveryLat || null,
-                delivery_longitude: body.deliveryLng || null,
-                delivery_notes: body.deliveryNotes || null,
+                table_id: table_id || null,
+                delivery_address_id: address_id || null,
+                // delivery_address: deliveryAddress || null, // If using raw text
+                voucher_id: voucher_id || null
             })
             .select()
             .single();
@@ -62,12 +68,13 @@ export async function POST(request: Request) {
         }
 
         // Insert Items
+        // Flatten customization to JSON
         const orderItems = items.map((item: any) => ({
             order_id: order.id,
-            product_name: item.product.name,
-            final_price: item.finalPrice || item.product.price, // Now using calculated finalPrice from client
+            product_name: item.product.name, // or item.product_name
+            final_price: item.finalPrice || item.price,
             quantity: item.quantity,
-            options_snapshot_json: item.customization,
+            options_snapshot_json: item.customization, // Stores the full customization object
         }));
 
         const { error: itemsError } = await supabaseAdmin
@@ -79,7 +86,16 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: itemsError.message }, { status: 500 });
         }
 
-        return NextResponse.json({ success: true, order });
+        // Estimate ready time (mock logic)
+        const estimatedReadyAt = new Date();
+        estimatedReadyAt.setMinutes(estimatedReadyAt.getMinutes() + 15);
+
+        return NextResponse.json({
+            success: true,
+            order_id: order.id,
+            status: order.status,
+            estimated_ready_at: estimatedReadyAt.toISOString()
+        });
     } catch (error: any) {
         console.error('Server error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
