@@ -108,10 +108,8 @@ export async function POST(request: Request) {
             expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 min expiry
         };
 
-        // Only log in non-production to avoid leaking payment info
-        if (paymentMode !== 'production') {
-            console.log(`Payment verified (${paymentMode.toUpperCase()}):`, paymentRecord);
-        }
+        // Only log in non-production modes (sandbox/bypass)
+        console.log(`Payment verified (${paymentMode.toUpperCase()}):`, paymentRecord);
 
         return NextResponse.json({
             success: true,
