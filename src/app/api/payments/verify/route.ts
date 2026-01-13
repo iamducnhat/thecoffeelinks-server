@@ -4,39 +4,64 @@ import { randomUUID } from 'crypto';
 /**
  * POST /api/payments/verify
  * 
- * Prototype payment verification endpoint.
- * In production, this should integrate with a real payment gateway
- * (Stripe, VNPay, MoMo, etc.)
+ * Payment verification endpoint.
+ * 
+ * ============================================================
+ * BYPASS MODE: Currently bypassing all validations for development
+ * See PAYMENT_INTEGRATION_GUIDE.md for production setup
+ * ============================================================
+ * 
+ * In production, this should integrate with a real payment gateway:
+ * - Stripe (International cards)
+ * - VNPay (Vietnam domestic cards/banks)  
+ * - MoMo (Vietnam e-wallet)
+ * - ZaloPay (Vietnam e-wallet)
  * 
  * TODO: Integrate real payment gateway
  * TODO: Add proper payment validation
  * TODO: Store payment records in database
  */
+
+// Set to false to enable strict validation (production mode)
+const BYPASS_PAYMENT_VALIDATION = true;
+
 export async function POST(request: Request) {
     try {
         const body = await request.json();
         const { amount, paymentMethod, storeId, items } = body;
 
-        // Basic validation
-        if (!amount || amount <= 0) {
-            return NextResponse.json(
-                { success: false, error: 'Invalid payment amount' },
-                { status: 400 }
-            );
-        }
+        // ============================================================
+        // VALIDATION SECTION
+        // When BYPASS_PAYMENT_VALIDATION is false, all validations apply
+        // ============================================================
+        
+        if (!BYPASS_PAYMENT_VALIDATION) {
+            // Strict validation for production
+            if (!amount || amount <= 0) {
+                return NextResponse.json(
+                    { success: false, error: 'Invalid payment amount' },
+                    { status: 400 }
+                );
+            }
 
-        if (!paymentMethod) {
-            return NextResponse.json(
-                { success: false, error: 'Payment method is required' },
-                { status: 400 }
-            );
-        }
+            if (!paymentMethod) {
+                return NextResponse.json(
+                    { success: false, error: 'Payment method is required' },
+                    { status: 400 }
+                );
+            }
 
-        if (!items || items.length === 0) {
-            return NextResponse.json(
-                { success: false, error: 'No items in order' },
-                { status: 400 }
-            );
+            if (!items || items.length === 0) {
+                return NextResponse.json(
+                    { success: false, error: 'No items in order' },
+                    { status: 400 }
+                );
+            }
+        }
+        
+        // Log bypass mode warning in development
+        if (BYPASS_PAYMENT_VALIDATION) {
+            console.warn('⚠️  PAYMENT BYPASS MODE ACTIVE - Not for production use');
         }
 
         // TODO: In production, validate with real payment provider

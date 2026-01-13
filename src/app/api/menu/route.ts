@@ -3,10 +3,10 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export async function GET() {
     try {
-        // 1. Fetch Products
+        // 1. Fetch Products (including image field for display)
         const { data: products, error: productsError } = await supabaseAdmin
             .from('products')
-            .select('id, name, description, base_price, category, is_popular, is_new, is_available')
+            .select('id, name, description, base_price, category, image, is_popular, is_new, is_available')
             .eq('is_available', true);
 
         if (productsError) throw productsError;

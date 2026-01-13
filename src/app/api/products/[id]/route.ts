@@ -11,7 +11,7 @@ export async function GET(
 
         const { data: product, error } = await supabaseAdmin
             .from('products')
-            .select('id, name, description, base_price, category, is_popular, is_new, is_available')
+            .select('id, name, description, base_price, category, image, is_popular, is_new, is_available')
             .eq('id', id)
             .single();
 
@@ -27,7 +27,7 @@ export async function GET(
             description: product.description,
             basePrice: Number(product.base_price),
             category: product.category,
-            image: '/images/default.jpg', // Default fallback
+            image: product.image || null,
             isPopular: product.is_popular,
             isNew: product.is_new,
             isAvailable: product.is_available,
@@ -56,7 +56,7 @@ export async function PUT(
         if (body.description !== undefined) updateData.description = body.description;
         if (body.basePrice !== undefined) updateData.base_price = body.basePrice;
         if (body.category !== undefined) updateData.category = body.category;
-        // if (body.image !== undefined) updateData.image = body.image; // Column missing
+        if (body.image !== undefined) updateData.image = body.image;
         if (body.isPopular !== undefined) updateData.is_popular = body.isPopular;
         if (body.isNew !== undefined) updateData.is_new = body.isNew;
         if (body.isAvailable !== undefined) updateData.is_available = body.isAvailable;
@@ -65,7 +65,7 @@ export async function PUT(
             .from('products')
             .update(updateData)
             .eq('id', id)
-            .select('id, name, description, base_price, category, is_popular, is_new, is_available')
+            .select('id, name, description, base_price, category, image, is_popular, is_new, is_available')
             .single();
 
         if (error) {
@@ -80,7 +80,7 @@ export async function PUT(
             description: product.description,
             basePrice: Number(product.base_price),
             category: product.category,
-            image: '/images/default.jpg', // Default fallback as DB column is missing
+            image: product.image || null,
             isPopular: product.is_popular,
             isNew: product.is_new,
             isAvailable: product.is_available,
