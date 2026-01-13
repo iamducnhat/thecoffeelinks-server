@@ -22,11 +22,11 @@ export async function POST(request: Request) {
         // Optionally validate locationId here
 
         const { data, error } = await supabaseAdmin
-            .from('check_ins')
+            .from('store_checkins')
             .insert({
                 user_id: userId,
-                location_id: locationId || 'default', // customizable or default to generic
-                checked_in_at: new Date().toISOString()
+                store_id: locationId || 'default',
+                created_at: new Date().toISOString()
             })
             .select()
             .single();

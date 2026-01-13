@@ -5,9 +5,9 @@ import { supabaseAdmin } from '@/lib/supabase';
 export async function GET() {
     try {
         const { data: checkIns, error } = await supabaseAdmin
-            .from('check_ins')
+            .from('store_checkins')
             .select('*, user:users(*)')
-            .order('checked_in_at', { ascending: false })
+            .order('created_at', { ascending: false })
             .limit(20);
 
         if (error) {
