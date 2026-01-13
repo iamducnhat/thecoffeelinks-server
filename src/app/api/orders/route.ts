@@ -111,8 +111,14 @@ export async function POST(request: Request) {
         const estimatedReadyAt = new Date();
         estimatedReadyAt.setMinutes(estimatedReadyAt.getMinutes() + 15);
 
+        // Return full order object for Swift app compatibility
         return NextResponse.json({
             success: true,
+            order: {
+                ...order,
+                items: orderItems,
+                estimated_ready_at: estimatedReadyAt.toISOString()
+            },
             order_id: order.id,
             status: order.status,
             estimated_ready_at: estimatedReadyAt.toISOString()
