@@ -38,10 +38,21 @@ export async function POST(request: Request) {
         if (type === 'take-away') type = 'take_away';
 
         // Payment Verification Logic
-        // For this task, we assume payment is handled or method is sufficient. 
-        // If 'paymentToken' is strictly required by business logic, we'd check it.
-        // Prompt says "Payment Method: card | apple_pay | points".
-        // We will default status to 'received' (prompt) which maps to 'placed' or 'received' in DB.
+        // Only online payment methods accepted (no cash)
+        const validPaymentMethods = ['card', 'momo', 'zalopay', 'apple_pay', 'points'];
+        const selectedPayment = payment_method || paymentMethod;
+        
+        if (!selectedPayment) {
+            return NextResponse.json({ error: 'Payment method is required' }, { status: 400 });
+        }
+        
+        if (selectedPayment === 'cash') {
+            return NextResponse.json({ error: 'Cash payment is not accepted. Please use online payment.' }, { status: 400 });
+        }
+        
+        if (!validPaymentMethods.includes(selectedPayment)) {
+            return NextResponse.json({ error: `Invalid payment method. Accepted: ${validPaymentMethods.join(', ')}` }, { status: 400 });
+        }
 
         // Validate delivery address is required for delivery orders
         if (type === 'delivery' && !deliveryAddress) {
@@ -54,7 +65,7 @@ export async function POST(request: Request) {
             status: 'received',
             total_amount: total_amount || total || 0,
             type: type,
-            payment_method: payment_method || paymentMethod || 'cash',
+            payment_method: selectedPayment, // Already validated above
             payment_status: 'pending',
             store_id: body.storeId || null,
             table_id: table_id || null,
