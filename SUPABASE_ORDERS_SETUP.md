@@ -21,9 +21,13 @@ CREATE TABLE IF NOT EXISTS orders (
     type TEXT DEFAULT 'dine_in' CHECK (type IN ('dine_in', 'take_away', 'delivery')),
     total_amount DECIMAL(10, 2) DEFAULT 0,
     
-    -- Payment
-    payment_method TEXT DEFAULT 'cash',
+    -- Payment (online only - no cash)
+    payment_method TEXT NOT NULL CHECK (payment_method IN ('card', 'momo', 'zalopay', 'apple_pay', 'points')),
     payment_status TEXT DEFAULT 'pending' CHECK (payment_status IN ('pending', 'paid', 'failed', 'refunded')),
+    
+    -- Delivery (optional - required only for delivery type)
+    delivery_address TEXT,
+    notes TEXT,
     
     -- References
     store_id UUID REFERENCES stores(id) ON DELETE SET NULL,
@@ -134,11 +138,13 @@ CREATE TRIGGER update_orders_updated_at
 | `status` | TEXT | Yes | Order status |
 | `type` | TEXT | Yes | dine_in, take_away, delivery |
 | `total_amount` | DECIMAL | Yes | Order total |
-| `payment_method` | TEXT | Yes | cash, card, momo, etc. |
+| `payment_method` | TEXT | Yes | card, momo, zalopay, apple_pay, points (no cash) |
 | `payment_status` | TEXT | Yes | pending, paid, failed |
 | `store_id` | UUID | No | Reference to stores |
 | `table_id` | TEXT | No | Table number for dine-in |
 | `voucher_id` | UUID | No | Applied voucher |
+| `delivery_address` | TEXT | No* | Required for delivery orders |
+| `notes` | TEXT | No | Order notes |
 | `created_at` | TIMESTAMP | Auto | Creation time |
 | `updated_at` | TIMESTAMP | Auto | Last update time |
 
@@ -185,18 +191,41 @@ ORDER BY ordinal_position;
 
 ---
 
-## Adding Optional Columns Later
+## Adding Optional Columns to Existing Table
 
-If you need delivery support:
+If you already have the orders table but need to add delivery support:
 
 ```sql
--- Add delivery columns
+-- Add delivery columns (run if columns don't exist)
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_address TEXT;
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_lat DECIMAL(10, 8);
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_lng DECIMAL(11, 8);
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_notes TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS notes TEXT;
+
+-- Future: Add geo coordinates if needed
+-- ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_lat DECIMAL(10, 8);
+-- ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_lng DECIMAL(11, 8);
 ```
+
+---
+
+## Payment Method Rules
+
+**Only online payments accepted:**
+- `card` - Credit/Debit card (Stripe)
+- `momo` - MoMo e-wallet
+- `zalopay` - ZaloPay e-wallet  
+- `apple_pay` - Apple Pay
+- `points` - Loyalty points
+
+**NOT accepted:**
+- `cash` ❌ - Returns error: "Cash payment is not accepted"
+
+---
+
+## Delivery Address Rules
+
+- **Dine-in** (`dine_in`): No address needed
+- **Take-away** (`take_away`): No address needed
+- **Delivery** (`delivery`): `delivery_address` is **required**
 
 ---
 
@@ -232,12 +261,16 @@ The API currently only requires these columns (everything else is optional):
 - `status` (TEXT)
 - `type` (TEXT)
 - `total_amount` (DECIMAL)
-- `payment_method` (TEXT)
+- `payment_method` (TEXT) - card, momo, zalopay, apple_pay, points only
 - `payment_status` (TEXT)
 - `store_id` (UUID, nullable)
 - `table_id` (TEXT, nullable)
 - `voucher_id` (UUID, nullable)
 - `created_at` (TIMESTAMP)
+
+**Optional columns (add if needed):**
+- `delivery_address` (TEXT) - Required for delivery orders
+- `notes` (TEXT)
 
 **order_items:**
 - `id` (UUID, primary key)
