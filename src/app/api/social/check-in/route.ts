@@ -32,12 +32,14 @@ export async function POST(request: Request) {
             .single();
 
         if (error) {
+            console.error('Database error:', error);
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
         return NextResponse.json({ success: true, checkIn: data });
 
     } catch (error: any) {
+        console.error('Check-in error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
