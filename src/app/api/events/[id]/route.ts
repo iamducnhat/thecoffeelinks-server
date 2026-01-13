@@ -26,8 +26,12 @@ export async function GET(
             type: event.type,
             title: event.title,
             subtitle: event.subtitle,
+            description: event.description,
+            date: event.date,
+            storeId: event.store_id,
             bg: event.bg,
             icon: event.icon,
+            imageURL: event.image_url,
             isActive: event.is_active,
         };
 
@@ -55,6 +59,9 @@ export async function PUT(
         if (body.type !== undefined) updateData.type = body.type;
         if (body.title !== undefined) updateData.title = body.title;
         if (body.subtitle !== undefined) updateData.subtitle = body.subtitle;
+        if (body.description !== undefined) updateData.description = body.description;
+        if (body.date !== undefined) updateData.date = body.date;
+        if (body.storeId !== undefined) updateData.store_id = body.storeId;
         if (body.bg !== undefined) updateData.bg = body.bg;
         if (body.icon !== undefined) updateData.icon = body.icon;
         if (body.imageURL !== undefined || body.image_url !== undefined) {
@@ -80,6 +87,9 @@ export async function PUT(
             type: event.type,
             title: event.title,
             subtitle: event.subtitle,
+            description: event.description,
+            date: event.date,
+            storeId: event.store_id,
             bg: event.bg,
             icon: event.icon,
             imageURL: event.image_url,
