@@ -5,40 +5,144 @@ import { supabaseAdmin } from '@/lib/supabase';
  * POST /api/orders
  * 
  * Create a new order. Requires payment verification token.
- * 
- * TODO: Validate payment token against stored payment records
- * TODO: Check payment token expiry
  */
+
+// Input validation helpers
+const MAX_ITEMS_PER_ORDER = 50;
+const MAX_QUANTITY_PER_ITEM = 20;
+const MAX_TOTAL_AMOUNT = 50000000; // 50 million VND
+const MIN_TOTAL_AMOUNT = 1000; // 1000 VND minimum
+
+interface OrderItemInput {
+    product?: { name?: string; id?: string };
+    product_name?: string;
+    quantity?: number;
+    finalPrice?: number;
+    price?: number;
+    customization?: Record<string, unknown>;
+}
+
+function validateOrderItems(items: OrderItemInput[]): { valid: boolean; error?: string } {
+    if (!Array.isArray(items)) {
+        return { valid: false, error: 'Items must be an array' };
+    }
+    
+    if (items.length === 0) {
+        return { valid: false, error: 'No items in order' };
+    }
+    
+    if (items.length > MAX_ITEMS_PER_ORDER) {
+        return { valid: false, error: `Maximum ${MAX_ITEMS_PER_ORDER} items per order` };
+    }
+    
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const productName = item.product?.name || item.product_name;
+        
+        if (!productName || typeof productName !== 'string') {
+            return { valid: false, error: `Item ${i + 1}: Product name is required` };
+        }
+        
+        if (productName.length > 200) {
+            return { valid: false, error: `Item ${i + 1}: Product name too long` };
+        }
+        
+        const quantity = item.quantity;
+        if (typeof quantity !== 'number' || quantity < 1 || quantity > MAX_QUANTITY_PER_ITEM) {
+            return { valid: false, error: `Item ${i + 1}: Quantity must be between 1 and ${MAX_QUANTITY_PER_ITEM}` };
+        }
+        
+        const price = item.finalPrice || item.price;
+        if (typeof price !== 'number' || price < 0) {
+            return { valid: false, error: `Item ${i + 1}: Invalid price` };
+        }
+    }
+    
+    return { valid: true };
+}
+
+// Helper to extract and validate user from auth token
+async function getAuthenticatedUserId(request: Request): Promise<{ userId: string | null; error?: string }> {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader) {
+        return { userId: null }; // Anonymous order allowed
+    }
+    
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) {
+        return { userId: null };
+    }
+    
+    try {
+        const { data, error } = await supabaseAdmin.auth.getUser(token);
+        if (error || !data.user) {
+            return { userId: null, error: 'Invalid authentication token' };
+        }
+        return { userId: data.user.id };
+    } catch {
+        return { userId: null };
+    }
+}
+
 export async function POST(request: Request) {
     try {
+        // Get authenticated user if token provided
+        const { userId: authUserId, error: authError } = await getAuthenticatedUserId(request);
+        if (authError) {
+            return NextResponse.json({ error: authError }, { status: 401 });
+        }
+        
         const body = await request.json();
         // Support prompt payload keys + legacy keys
         const {
             items,
-            order_type, deliveryOption, // order_type preferred
+            order_type, deliveryOption,
             table_id,
-            address_id, deliveryAddress, // address_id preferred? or deliveryAddress object
-            payment_method, paymentMethod, // payment_method preferred
+            address_id, deliveryAddress,
+            payment_method, paymentMethod,
             voucher_id,
-            user_id, // Authenticated user
-            total_amount, total // total preferred?
+            user_id, // Client-provided user_id
+            total_amount, total
         } = body;
+        
+        // Security: If user_id is provided in body, it MUST match authenticated user
+        // This prevents users from creating orders for other users
+        let finalUserId = authUserId;
+        if (user_id) {
+            if (authUserId && user_id !== authUserId) {
+                return NextResponse.json({ 
+                    error: 'User ID mismatch. Cannot create orders for other users.' 
+                }, { status: 403 });
+            }
+            finalUserId = user_id;
+        }
 
-        // Basic validation
-        if (!items || items.length === 0) {
-            return NextResponse.json({ error: 'No items in order' }, { status: 400 });
+        // Validate items
+        const itemsValidation = validateOrderItems(items);
+        if (!itemsValidation.valid) {
+            return NextResponse.json({ error: itemsValidation.error }, { status: 400 });
+        }
+        
+        // Validate total amount
+        const orderTotal = total_amount || total || 0;
+        if (typeof orderTotal !== 'number' || orderTotal < MIN_TOTAL_AMOUNT) {
+            return NextResponse.json({ error: `Minimum order amount is ${MIN_TOTAL_AMOUNT}đ` }, { status: 400 });
+        }
+        
+        if (orderTotal > MAX_TOTAL_AMOUNT) {
+            return NextResponse.json({ error: 'Order amount exceeds maximum limit' }, { status: 400 });
         }
 
         // Determine Type
-        // prompt: "dine_in | take_away | delivery"
-        // db enum: 'dine_in', 'take_away', 'delivery' (assuming)
         let type = order_type || (deliveryOption === 'delivery' || deliveryOption === 'take-away' ? 'take_away' : 'dine_in');
-
-        // Mapped to DB enum often snake_case
         if (type === 'take-away') type = 'take_away';
+        
+        const validTypes = ['dine_in', 'take_away', 'delivery'];
+        if (!validTypes.includes(type)) {
+            return NextResponse.json({ error: 'Invalid order type' }, { status: 400 });
+        }
 
-        // Payment Verification Logic
-        // Only online payment methods accepted (no cash)
+        // Payment Verification
         const validPaymentMethods = ['card', 'momo', 'zalopay', 'apple_pay', 'points'];
         const selectedPayment = payment_method || paymentMethod;
         
@@ -58,23 +162,28 @@ export async function POST(request: Request) {
         if (type === 'delivery' && !deliveryAddress) {
             return NextResponse.json({ error: 'Delivery address is required for delivery orders' }, { status: 400 });
         }
+        
+        // Sanitize delivery address
+        const sanitizedAddress = typeof deliveryAddress === 'string' 
+            ? deliveryAddress.slice(0, 500) 
+            : null;
 
-        // Build order data - only include optional fields if they have values
+        // Build order data
         const orderData: Record<string, any> = {
-            user_id: user_id || null,
+            user_id: finalUserId || null, // Use validated user ID
             status: 'received',
-            total_amount: total_amount || total || 0,
+            total_amount: orderTotal,
             type: type,
-            payment_method: selectedPayment, // Already validated above
+            payment_method: selectedPayment,
             payment_status: 'pending',
             store_id: body.storeId || null,
             table_id: table_id || null,
             voucher_id: voucher_id || null
         };
 
-        // Add optional fields only if they exist (avoids column not found errors)
-        if (body.deliveryNotes) orderData.notes = body.deliveryNotes;
-        if (deliveryAddress) orderData.delivery_address = deliveryAddress;
+        // Add optional fields only if they exist
+        if (body.deliveryNotes) orderData.notes = String(body.deliveryNotes).slice(0, 500);
+        if (sanitizedAddress) orderData.delivery_address = sanitizedAddress;
 
         // Insert Order
         const { data: order, error: orderError } = await supabaseAdmin

@@ -74,15 +74,16 @@ export async function GET() {
             categories,
             products: products?.map(p => ({
                 ...p,
-                base_price: Number(p.base_price), // ensure number
+                base_price: Number(p.base_price),
+                image: p.image ? (p.image.startsWith('http') ? p.image : `https://ggikmpqyhkfhctwqbytk.supabase.co/storage/v1/object/public/${p.image}`) : null,
             })),
             toppings: toppings?.map(t => ({
                 ...t,
                 price: Number(t.price)
             })),
             sizes: sizeModifiers,
-            sugar_options: sugarOptions,
-            ice_options: iceOptions
+            sugarOptions: sugarOptions,
+            iceOptions: iceOptions
         });
 
     } catch (error: any) {

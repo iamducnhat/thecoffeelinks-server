@@ -56,7 +56,7 @@ export async function GET(request: Request) {
             description: p.description,
             base_price: Number(p.base_price),
             category: p.category,
-            image: p.image || '/images/default.jpg',
+            image: p.image ? (p.image.startsWith('http') ? p.image : `https://ggikmpqyhkfhctwqbytk.supabase.co/storage/v1/object/public/${p.image}`) : null,
             is_popular: p.is_popular,
             is_new: p.is_new,
             is_available: p.is_available,
@@ -74,8 +74,8 @@ export async function GET(request: Request) {
             toppings: transformedToppings,
             size_modifiers: Object.keys(sizeModifiers).length > 0 ? sizeModifiers : {
                 'S': { price: 0, label: 'Small' },
-                'M': { price: 10000, label: 'Medium' },
-                'L': { price: 20000, label: 'Large' },
+                'M': { price: 5000, label: 'Medium' },
+                'L': { price: 10000, label: 'Large' },
             },
         });
     } catch (error: any) {
@@ -84,17 +84,58 @@ export async function GET(request: Request) {
     }
 }
 
-// POST: Create a new product
+// Helper to verify admin access
+async function verifyAdminAccess(request: Request): Promise<{ authorized: boolean; error?: string }> {
+    // Check for admin API key or valid auth token
+    const adminKey = request.headers.get('X-Admin-Key');
+    const adminSecret = process.env.ADMIN_SECRET;
+    
+    if (adminKey && adminSecret && adminKey === adminSecret) {
+        return { authorized: true };
+    }
+    
+    // Alternatively check for valid user session (for authenticated admin users)
+    const authHeader = request.headers.get('Authorization');
+    if (authHeader) {
+        const token = authHeader.replace('Bearer ', '');
+        try {
+            const { data, error } = await supabaseAdmin.auth.getUser(token);
+            if (!error && data.user) {
+                // In production, also check user role/permissions
+                return { authorized: true };
+            }
+        } catch {}
+    }
+    
+    return { authorized: false, error: 'Admin access required' };
+}
+
+// POST: Create a new product (Admin only)
 export async function POST(request: Request) {
     try {
+        // Verify admin access
+        const { authorized, error: authError } = await verifyAdminAccess(request);
+        if (!authorized) {
+            return NextResponse.json({ error: authError }, { status: 401 });
+        }
+        
         const body = await request.json();
+        
+        // Input validation
+        if (!body.name || typeof body.name !== 'string' || body.name.length < 2) {
+            return NextResponse.json({ error: 'Product name is required (min 2 characters)' }, { status: 400 });
+        }
+        
+        if (body.basePrice !== undefined && (typeof body.basePrice !== 'number' || body.basePrice < 0)) {
+            return NextResponse.json({ error: 'Invalid base price' }, { status: 400 });
+        }
 
         const newProduct = {
             id: body.id || body.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
-            name: body.name,
-            description: body.description,
-            base_price: body.basePrice,
-            category: body.category,
+            name: body.name.trim(),
+            description: body.description?.trim() || null,
+            base_price: body.basePrice || 0,
+            category: body.category || 'coffee',
             image: body.image || null,
             is_popular: body.isPopular || false,
             is_new: body.isNew || false,

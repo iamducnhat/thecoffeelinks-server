@@ -7,8 +7,11 @@ import { randomUUID } from 'crypto';
  * Payment verification endpoint.
  * 
  * ============================================================
- * BYPASS MODE: Currently bypassing all validations for development
- * See PAYMENT_INTEGRATION_GUIDE.md for production setup
+ * CONFIGURATION:
+ * Set PAYMENT_MODE environment variable:
+ * - 'production' = Requires real payment integration (fails without it)
+ * - 'sandbox' = Validates inputs but returns mock success
+ * - 'bypass' = No validation (DEVELOPMENT ONLY - NOT FOR PRODUCTION)
  * ============================================================
  * 
  * In production, this should integrate with a real payment gateway:
@@ -16,27 +19,47 @@ import { randomUUID } from 'crypto';
  * - VNPay (Vietnam domestic cards/banks)  
  * - MoMo (Vietnam e-wallet)
  * - ZaloPay (Vietnam e-wallet)
- * 
- * TODO: Integrate real payment gateway
- * TODO: Add proper payment validation
- * TODO: Store payment records in database
  */
 
-// Set to false to enable strict validation (production mode)
-const BYPASS_PAYMENT_VALIDATION = true;
+type PaymentMode = 'production' | 'sandbox' | 'bypass';
+
+const getPaymentMode = (): PaymentMode => {
+    const mode = process.env.PAYMENT_MODE?.toLowerCase();
+    if (mode === 'production' || mode === 'sandbox' || mode === 'bypass') {
+        return mode;
+    }
+    // Default to sandbox for safety (validates but doesn't require real gateway)
+    return 'sandbox';
+};
 
 export async function POST(request: Request) {
     try {
+        const paymentMode = getPaymentMode();
         const body = await request.json();
         const { amount, paymentMethod, storeId, items } = body;
 
         // ============================================================
-        // VALIDATION SECTION
-        // When BYPASS_PAYMENT_VALIDATION is false, all validations apply
+        // MODE-BASED BEHAVIOR
         // ============================================================
         
-        if (!BYPASS_PAYMENT_VALIDATION) {
-            // Strict validation for production
+        if (paymentMode === 'production') {
+            // PRODUCTION MODE: Require real payment gateway integration
+            // This will fail until a real gateway is integrated
+            return NextResponse.json(
+                { 
+                    success: false, 
+                    error: 'Payment gateway not configured. Please contact support.',
+                    mode: 'production'
+                },
+                { status: 503 }
+            );
+        }
+        
+        if (paymentMode === 'bypass') {
+            // BYPASS MODE: Skip all validation (DANGEROUS - dev only)
+            console.warn('🚨 PAYMENT BYPASS MODE ACTIVE - THIS IS NOT SAFE FOR PRODUCTION!');
+        } else {
+            // SANDBOX MODE: Validate inputs but return mock success
             if (!amount || amount <= 0) {
                 return NextResponse.json(
                     { success: false, error: 'Invalid payment amount' },
@@ -57,33 +80,38 @@ export async function POST(request: Request) {
                     { status: 400 }
                 );
             }
-        }
-        
-        // Log bypass mode warning in development
-        if (BYPASS_PAYMENT_VALIDATION) {
-            console.warn('⚠️  PAYMENT BYPASS MODE ACTIVE - Not for production use');
+            
+            // Validate payment method is supported
+            const supportedMethods = ['card', 'momo', 'zalopay', 'apple_pay', 'points'];
+            if (!supportedMethods.includes(paymentMethod)) {
+                return NextResponse.json(
+                    { success: false, error: `Unsupported payment method: ${paymentMethod}` },
+                    { status: 400 }
+                );
+            }
         }
 
-        // TODO: In production, validate with real payment provider
-        // For prototype, simulate payment processing
-        const paymentToken = `PAY_${randomUUID().replace(/-/g, '').substring(0, 16).toUpperCase()}`;
+        // Generate mock payment token
+        const paymentToken = `PAY_${paymentMode.toUpperCase()}_${randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase()}`;
 
         // Simulate payment processing delay (300-800ms)
         await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 500));
 
-        // Mock success response
-        // TODO: Store payment record in database
         const paymentRecord = {
             token: paymentToken,
             amount,
             paymentMethod,
             storeId: storeId || null,
             status: 'verified',
+            mode: paymentMode,
             createdAt: new Date().toISOString(),
             expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 min expiry
         };
 
-        console.log('Payment verified (PROTOTYPE):', paymentRecord);
+        // Only log in non-production to avoid leaking payment info
+        if (paymentMode !== 'production') {
+            console.log(`Payment verified (${paymentMode.toUpperCase()}):`, paymentRecord);
+        }
 
         return NextResponse.json({
             success: true,
@@ -92,7 +120,9 @@ export async function POST(request: Request) {
                 status: 'verified',
                 amount,
                 expiresAt: paymentRecord.expiresAt,
-            }
+            },
+            // Include mode in response so clients know this is sandbox/test
+            _mode: paymentMode !== 'production' ? paymentMode : undefined,
         });
 
     } catch (error: any) {

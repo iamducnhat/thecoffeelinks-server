@@ -14,7 +14,21 @@ export async function GET() {
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        return NextResponse.json({ success: true, stores });
+        // Transform to match Swift Store model expectations
+        const transformedStores = stores?.map((s: any) => ({
+            id: String(s.id),
+            name: s.name,
+            address: s.address,
+            latitude: s.latitude ?? 0,
+            longitude: s.longitude ?? 0,
+            imageUrl: s.image || s.image_url || null,
+            phoneNumber: s.phone || s.phone_number || null,
+            openingHours: s.opening_time && s.closing_time 
+                ? `${s.opening_time} - ${s.closing_time}` 
+                : (s.opening_hours || null),
+        })) || [];
+
+        return NextResponse.json({ success: true, stores: transformedStores });
     } catch (error: any) {
         console.error('Server error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

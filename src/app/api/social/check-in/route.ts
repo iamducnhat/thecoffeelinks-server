@@ -19,13 +19,22 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { locationId } = body;
 
-        // Optionally validate locationId here
+        // Validate locationId - it's required and must be a valid UUID
+        if (!locationId) {
+            return NextResponse.json({ error: 'locationId is required' }, { status: 400 });
+        }
+
+        // Basic UUID format validation
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(locationId)) {
+            return NextResponse.json({ error: 'Invalid locationId format' }, { status: 400 });
+        }
 
         const { data, error } = await supabaseAdmin
             .from('store_checkins')
             .insert({
                 user_id: userId,
-                store_id: locationId || 'default',
+                store_id: locationId,
                 checked_in_at: new Date().toISOString()
             })
             .select()

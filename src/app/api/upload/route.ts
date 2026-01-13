@@ -2,34 +2,93 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { processImage, optimizeForWeb, createThumbnail, ImageProcessingOptions } from '@/lib/imageProcessing';
 
+// Security constants
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const ALLOWED_BUCKETS = ['products', 'events', 'stores', 'users', 'vouchers'];
+
+// Simple admin auth check - in production, use proper JWT verification
+async function verifyAdminAccess(request: Request): Promise<boolean> {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader) return false;
+    
+    // For admin uploads, we check if they have a valid session
+    // This is a basic check - enhance with proper admin role verification
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) return false;
+    
+    try {
+        const { data, error } = await supabaseAdmin.auth.getUser(token);
+        return !error && !!data.user;
+    } catch {
+        return false;
+    }
+}
+
 export async function POST(request: Request) {
     try {
+        // Optional: Verify admin access for protected uploads
+        // Uncomment if you want to require auth for all uploads
+        // const isAuthorized = await verifyAdminAccess(request);
+        // if (!isAuthorized) {
+        //     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        // }
+
         // Parse FormData
         const formData = await request.formData();
         const file = formData.get('file') as File;
-        const bucket = formData.get('bucket') as string || 'products'; // Default bucket
-        const path = formData.get('path') as string; // Optional custom path
+        const bucket = formData.get('bucket') as string || 'products';
+        const path = formData.get('path') as string;
         
         // Image processing options
-        const cropData = formData.get('crop'); // JSON string with {x, y, width, height}
-        const resizeData = formData.get('resize'); // JSON string with {width, height, fit}
-        const quality = formData.get('quality'); // 1-100
-        const format = formData.get('format') as 'jpeg' | 'png' | 'webp'; // Output format
-        const createThumb = formData.get('createThumbnail') === 'true'; // Generate thumbnail
-        const optimize = formData.get('optimize') === 'true'; // Auto-optimize for web
+        const cropData = formData.get('crop');
+        const resizeData = formData.get('resize');
+        const quality = formData.get('quality');
+        const format = formData.get('format') as 'jpeg' | 'png' | 'webp';
+        const createThumb = formData.get('createThumbnail') === 'true';
+        const optimize = formData.get('optimize') === 'true';
 
+        // Validation: File exists
         if (!file) {
             return NextResponse.json({ error: 'No file provided' }, { status: 400 });
         }
+        
+        // Validation: File size
+        if (file.size > MAX_FILE_SIZE) {
+            return NextResponse.json({ 
+                error: `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB` 
+            }, { status: 400 });
+        }
 
-        // Validate file type
-        if (!file.type.startsWith('image/')) {
-            return NextResponse.json({ error: 'File must be an image' }, { status: 400 });
+        // Validation: MIME type (don't trust file.type alone)
+        if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+            return NextResponse.json({ 
+                error: `Invalid file type. Allowed: ${ALLOWED_MIME_TYPES.join(', ')}` 
+            }, { status: 400 });
+        }
+        
+        // Validation: Bucket whitelist
+        if (!ALLOWED_BUCKETS.includes(bucket)) {
+            return NextResponse.json({ 
+                error: `Invalid bucket. Allowed: ${ALLOWED_BUCKETS.join(', ')}` 
+            }, { status: 400 });
         }
 
         // Convert file to buffer
         const arrayBuffer = await file.arrayBuffer();
         let buffer: Buffer = Buffer.from(new Uint8Array(arrayBuffer));
+        
+        // Additional validation: Check magic bytes to verify actual file type
+        const magicBytes = buffer.slice(0, 8).toString('hex');
+        const isValidImage = 
+            magicBytes.startsWith('89504e47') || // PNG
+            magicBytes.startsWith('ffd8ff') ||   // JPEG
+            magicBytes.startsWith('52494646') || // WEBP (RIFF)
+            magicBytes.startsWith('47494638');   // GIF
+            
+        if (!isValidImage) {
+            return NextResponse.json({ error: 'Invalid image file' }, { status: 400 });
+        }
 
         // Build processing options
         const processingOptions: ImageProcessingOptions = {};

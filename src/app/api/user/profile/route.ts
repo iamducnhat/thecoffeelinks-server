@@ -1,6 +1,71 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
+// Track in-progress profile creations to prevent race conditions
+const profileCreationLocks = new Map<string, Promise<any>>();
+
+async function createProfileWithLock(userId: string, email: string | undefined, fullName: string | undefined) {
+    // Check if creation is already in progress for this user
+    const existingLock = profileCreationLocks.get(userId);
+    if (existingLock) {
+        return existingLock;
+    }
+    
+    // Create new profile with lock
+    const creationPromise = (async () => {
+        try {
+            // Double-check profile doesn't exist (another request might have created it)
+            const { data: existingProfile } = await supabaseAdmin
+                .from('users')
+                .select('id')
+                .eq('id', userId)
+                .single();
+                
+            if (existingProfile) {
+                return { alreadyExists: true };
+            }
+            
+            // Create profile
+            const { data: newProfile, error: createError } = await supabaseAdmin
+                .from('users')
+                .insert({
+                    id: userId,
+                    email: email,
+                    name: fullName || email?.split('@')[0] || 'User',
+                    points: 50,
+                    total_points_earned: 50,
+                    member_since: new Date().toISOString(),
+                })
+                .select()
+                .single();
+
+            if (createError) {
+                // Check if it's a duplicate key error (profile created by concurrent request)
+                if (createError.code === '23505') {
+                    return { alreadyExists: true };
+                }
+                throw createError;
+            }
+
+            // Add Welcome Points to history (only if profile was just created)
+            await supabaseAdmin.from('points_history').insert({
+                user_id: userId,
+                type: 'earned',
+                points: 50,
+                description: 'Welcome Bonus',
+            });
+
+            return { profile: newProfile, created: true };
+        } finally {
+            // Clean up lock after 5 seconds
+            setTimeout(() => profileCreationLocks.delete(userId), 5000);
+        }
+    })();
+    
+    profileCreationLocks.set(userId, creationPromise);
+    return creationPromise;
+}
+
 export async function GET(request: Request) {
     try {
         const authHeader = request.headers.get('Authorization');
@@ -24,36 +89,31 @@ export async function GET(request: Request) {
             .eq('id', userId)
             .single();
 
-        // If profile doesn't exist but auth user does, create the profile
+        // If profile doesn't exist but auth user does, create the profile with lock
         if (userError && userError.code === 'PGRST116') {
-            // User exists in auth but not in users table - create profile
-            const { data: newProfile, error: createError } = await supabaseAdmin
-                .from('users')
-                .insert({
-                    id: userId,
-                    email: authData.user.email,
-                    name: authData.user.user_metadata?.full_name || authData.user.email?.split('@')[0] || 'User',
-                    points: 50, // Welcome bonus
-                    total_points_earned: 50,
-                    member_since: new Date().toISOString(),
-                })
-                .select()
-                .single();
-
-            if (createError) {
-                console.error('Auto-create profile error:', createError);
+            const result = await createProfileWithLock(
+                userId,
+                authData.user.email,
+                authData.user.user_metadata?.full_name
+            );
+            
+            if (result.alreadyExists) {
+                // Fetch the profile that was created by concurrent request
+                const { data: existingProfile, error: refetchError } = await supabaseAdmin
+                    .from('users')
+                    .select('*')
+                    .eq('id', userId)
+                    .single();
+                    
+                if (refetchError) {
+                    return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 });
+                }
+                userData = existingProfile;
+            } else if (result.profile) {
+                userData = result.profile;
+            } else {
                 return NextResponse.json({ error: 'Failed to create profile' }, { status: 500 });
             }
-
-            // Add Welcome Points to history
-            await supabaseAdmin.from('points_history').insert({
-                user_id: userId,
-                type: 'earned',
-                points: 50,
-                description: 'Welcome Bonus',
-            });
-
-            userData = newProfile;
             userError = null;
         } else if (userError) {
             console.error('Fetch profile error:', userError);
@@ -65,7 +125,8 @@ export async function GET(request: Request) {
             .from('points_history')
             .select('*')
             .eq('user_id', userId)
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .limit(50); // Add limit for performance
 
         return NextResponse.json({
             success: true,
@@ -77,7 +138,7 @@ export async function GET(request: Request) {
 
     } catch (error: any) {
         console.error('Profile API error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }
 

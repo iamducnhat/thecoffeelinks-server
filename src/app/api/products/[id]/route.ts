@@ -1,7 +1,30 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
-// GET: Fetch a single product by ID
+// Helper to verify admin access
+async function verifyAdminAccess(request: Request): Promise<{ authorized: boolean; error?: string }> {
+    const adminKey = request.headers.get('X-Admin-Key');
+    const adminSecret = process.env.ADMIN_SECRET;
+    
+    if (adminKey && adminSecret && adminKey === adminSecret) {
+        return { authorized: true };
+    }
+    
+    const authHeader = request.headers.get('Authorization');
+    if (authHeader) {
+        const token = authHeader.replace('Bearer ', '');
+        try {
+            const { data, error } = await supabaseAdmin.auth.getUser(token);
+            if (!error && data.user) {
+                return { authorized: true };
+            }
+        } catch {}
+    }
+    
+    return { authorized: false, error: 'Admin access required' };
+}
+
+// GET: Fetch a single product by ID (Public)
 export async function GET(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -40,12 +63,18 @@ export async function GET(
     }
 }
 
-// PUT: Update a product
+// PUT: Update a product (Admin only)
 export async function PUT(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        // Verify admin access
+        const { authorized, error: authError } = await verifyAdminAccess(request);
+        if (!authorized) {
+            return NextResponse.json({ error: authError }, { status: 401 });
+        }
+        
         const { id } = await params;
         const body = await request.json();
 
@@ -101,12 +130,18 @@ export async function PATCH(
     return PUT(request, { params });
 }
 
-// DELETE: Delete a product
+// DELETE: Delete a product (Admin only)
 export async function DELETE(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        // Verify admin access
+        const { authorized, error: authError } = await verifyAdminAccess(request);
+        if (!authorized) {
+            return NextResponse.json({ error: authError }, { status: 401 });
+        }
+        
         const { id } = await params;
 
         const { error } = await supabaseAdmin

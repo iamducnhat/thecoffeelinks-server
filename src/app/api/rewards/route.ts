@@ -65,7 +65,7 @@ export async function POST(request: Request) {
             name: body.name,
             description: body.description,
             points_cost: body.pointsCost,
-            image: body.image || '/images/reward-default.jpg',
+            image: body.image || null,
             category: body.category,
             is_available: body.isAvailable !== false,
         };
