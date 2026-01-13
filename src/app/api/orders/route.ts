@@ -168,6 +168,32 @@ export async function POST(request: Request) {
             ? deliveryAddress.slice(0, 500) 
             : null;
 
+        // Auto-save delivery address for authenticated users
+        if (sanitizedAddress && finalUserId) {
+            try {
+                // Check if address already exists
+                const { data: existingAddress } = await supabaseAdmin
+                    .from('addresses')
+                    .select('id')
+                    .eq('user_id', finalUserId)
+                    .eq('address', sanitizedAddress)
+                    .maybeSingle();
+
+                // Save address if it doesn't exist
+                if (!existingAddress) {
+                    await supabaseAdmin
+                        .from('addresses')
+                        .insert({
+                            user_id: finalUserId,
+                            address: sanitizedAddress
+                        });
+                }
+            } catch (addressError) {
+                // Don't fail order if address save fails, just log it
+                console.error('Failed to save address:', addressError);
+            }
+        }
+
         // Build order data
         const orderData: Record<string, any> = {
             user_id: finalUserId || null, // Use validated user ID

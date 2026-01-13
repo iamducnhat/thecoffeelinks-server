@@ -15,7 +15,7 @@ export async function GET() {
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        // Transform to frontend format
+        // Transform to frontend format (match Swift Event model)
         const transformedEvents = events?.map((e: any) => ({
             id: e.id,
             type: e.type,
@@ -23,6 +23,7 @@ export async function GET() {
             subtitle: e.subtitle,
             bg: e.bg,
             icon: e.icon,
+            imageURL: e.image_url,
         })) || [];
 
         return NextResponse.json({ events: transformedEvents });
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
             subtitle: body.subtitle,
             bg: body.bg || 'bg-neutral-900 text-neutral-50',
             icon: body.icon || 'Calendar',
+            image_url: body.imageURL || body.image_url,
             is_active: body.isActive !== false,
         };
 
@@ -57,7 +59,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        // Transform to frontend format
+        // Transform to frontend format (match Swift Event model)
         const transformedEvent = {
             id: event.id,
             type: event.type,
@@ -65,6 +67,7 @@ export async function POST(request: Request) {
             subtitle: event.subtitle,
             bg: event.bg,
             icon: event.icon,
+            imageURL: event.image_url,
         };
 
         return NextResponse.json({ success: true, event: transformedEvent });

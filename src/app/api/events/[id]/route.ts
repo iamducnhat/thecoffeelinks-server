@@ -57,6 +57,9 @@ export async function PUT(
         if (body.subtitle !== undefined) updateData.subtitle = body.subtitle;
         if (body.bg !== undefined) updateData.bg = body.bg;
         if (body.icon !== undefined) updateData.icon = body.icon;
+        if (body.imageURL !== undefined || body.image_url !== undefined) {
+            updateData.image_url = body.imageURL || body.image_url;
+        }
         if (body.isActive !== undefined) updateData.is_active = body.isActive;
 
         const { data: event, error } = await supabaseAdmin
@@ -71,7 +74,7 @@ export async function PUT(
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        // Transform to frontend format
+        // Transform to frontend format (match Swift Event model)
         const transformedEvent = {
             id: event.id,
             type: event.type,
@@ -79,6 +82,7 @@ export async function PUT(
             subtitle: event.subtitle,
             bg: event.bg,
             icon: event.icon,
+            imageURL: event.image_url,
             isActive: event.is_active,
         };
 
