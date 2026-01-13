@@ -88,19 +88,22 @@ export async function GET(request: Request) {
         });
 
         // Transform products to match expected frontend format
-        const transformedProducts = products?.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            description: p.description,
-            base_price: Number(p.base_price),
-            category: p.categories?.name || 'Uncategorized',
-            categoryId: p.category_id,
-            categoryType: p.categories?.type,
-            image: p.image ? (p.image.startsWith('http') ? p.image : `https://ggikmpqyhkfhctwqbytk.supabase.co/storage/v1/object/public/${p.image}`) : null,
-            is_popular: p.is_popular,
-            is_new: p.is_new,
-            is_available: p.is_available,
-        })) || [];
+        const transformedProducts = products?.map((p: any) => {
+            const category = p.categories as { name: string; type: string } | null;
+            return {
+                id: p.id,
+                name: p.name,
+                description: p.description,
+                base_price: Number(p.base_price),
+                category: category?.name || 'Uncategorized',
+                categoryId: p.category_id,
+                categoryType: category?.type,
+                image: p.image ? (p.image.startsWith('http') ? p.image : `https://ggikmpqyhkfhctwqbytk.supabase.co/storage/v1/object/public/${p.image}`) : null,
+                is_popular: p.is_popular,
+                is_new: p.is_new,
+                is_available: p.is_available,
+            };
+        }) || [];
 
         // Transform toppings
         const transformedToppings = toppings?.map((t: any) => ({
@@ -204,14 +207,15 @@ export async function POST(request: Request) {
         }
 
         // Transform response to match frontend format
+        const category = product.categories as { name: string; type: string } | null;
         const transformedProduct = {
             id: product.id,
             name: product.name,
             description: product.description,
             basePrice: Number(product.base_price),
-            category: product.categories?.name || 'Uncategorized',
+            category: category?.name || 'Uncategorized',
             categoryId: product.category_id,
-            categoryType: product.categories?.type,
+            categoryType: category?.type,
             image: product.image || null,
             isPopular: product.is_popular,
             isNew: product.is_new,
