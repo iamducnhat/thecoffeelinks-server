@@ -10,14 +10,14 @@ export async function POST(request: Request) {
 
         if (!decryptedData) {
             return NextResponse.json({ 
-                error: 'Invalid secret key or corrupted data' 
-            }, { status: 400 });
+                error: 'Invalid PIN: Unable to decrypt credentials' 
+            }, { status: 401 });
         }
 
-        const { email, password } = decryptedData;
+        const { username, password } = decryptedData;
 
-        if (!email || !password) {
-            return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
+        if (!username || !password) {
+            return NextResponse.json({ error: 'Username and password are required' }, { status: 400 });
         }
 
         // Check against admin environment variables
@@ -30,16 +30,16 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
         }
 
-        if (email === envUsername && password === envPassword) {
+        if (username === envUsername && password === envPassword) {
             // Return plain response - HTTPS provides encryption in transit
             return NextResponse.json({
                 success: true,
                 token: envSecret,
-                user: { username: email, role: 'admin' }
+                user: { username, role: 'admin' }
             });
         }
 
-        return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+        return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 });
 
     } catch (error: any) {
         console.error('Admin login error:', error);
