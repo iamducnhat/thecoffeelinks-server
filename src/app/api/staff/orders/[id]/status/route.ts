@@ -1,17 +1,13 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
 // POST /api/staff/orders/[id]/status
 export async function POST(
-    request: Request,
-    { params }: { params: { id: string } } // Next.js 13+ params
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> } // Next.js 16+ params are Promises
 ) {
-    // Note: In Next.js App Router, params are awaited in recent versions or passed as 2nd arg.
-    // Ensure we handle `params` correctly. If `params` is a Promise (Next 15?), we await it.
-    // Assuming Next 14 standard usage here.
-
     try {
-        const id = params.id;
+        const { id } = await params;
         const body = await request.json();
         const { status } = body; // "preparing" | "ready" | "completed"
 
