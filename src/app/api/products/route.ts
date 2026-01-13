@@ -89,7 +89,7 @@ export async function GET(request: Request) {
 
         // Transform products to match expected frontend format
         const transformedProducts = products?.map((p: any) => {
-            const category = p.categories as { name: string; type: string } | null;
+            const category = p.categories as unknown as { name: string; type: string } | null;
             return {
                 id: p.id,
                 name: p.name,
@@ -207,7 +207,7 @@ export async function POST(request: Request) {
         }
 
         // Transform response to match frontend format
-        const category = product.categories as { name: string; type: string } | null;
+        const category = product.categories as unknown as { name: string; type: string } | null;
         const transformedProduct = {
             id: product.id,
             name: product.name,
