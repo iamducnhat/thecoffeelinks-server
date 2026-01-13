@@ -26,7 +26,7 @@ export async function POST(request: Request) {
             .insert({
                 user_id: userId,
                 store_id: locationId || 'default',
-                created_at: new Date().toISOString()
+                checked_in_at: new Date().toISOString()
             })
             .select()
             .single();

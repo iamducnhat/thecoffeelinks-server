@@ -7,7 +7,7 @@ export async function GET() {
         const { data: checkIns, error } = await supabaseAdmin
             .from('store_checkins')
             .select('*, user:users(*)')
-            .order('created_at', { ascending: false })
+            .order('checked_in_at', { ascending: false })
             .limit(20);
 
         if (error) {
