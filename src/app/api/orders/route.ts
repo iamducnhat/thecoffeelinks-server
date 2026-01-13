@@ -44,8 +44,6 @@ export async function POST(request: Request) {
         // We will default status to 'received' (prompt) which maps to 'placed' or 'received' in DB.
 
         // Insert Order
-        // Note: Only using columns that exist in current schema
-        // Add delivery_address, notes columns to DB if needed later
         const { data: order, error: orderError } = await supabaseAdmin
             .from('orders')
             .insert({
@@ -57,7 +55,9 @@ export async function POST(request: Request) {
                 payment_status: 'pending',
                 store_id: body.storeId || null,
                 table_id: table_id || null,
-                voucher_id: voucher_id || null
+                voucher_id: voucher_id || null,
+                notes: body.deliveryNotes || null,
+                delivery_address: deliveryAddress || null
             })
             .select()
             .single();
