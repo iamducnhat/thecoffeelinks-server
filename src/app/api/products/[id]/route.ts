@@ -34,7 +34,7 @@ export async function GET(
 
         const { data: product, error } = await supabaseAdmin
             .from('products')
-            .select('id, name, description, base_price, category, image, is_popular, is_new, is_available')
+            .select('id, name, description, category, category_id, image, is_popular, is_new, is_available, size_options')
             .eq('id', id)
             .single();
 
@@ -48,12 +48,13 @@ export async function GET(
             id: product.id,
             name: product.name,
             description: product.description,
-            basePrice: Number(product.base_price),
             category: product.category,
+            categoryId: product.category_id,
             image: product.image || null,
             isPopular: product.is_popular,
             isNew: product.is_new,
             isAvailable: product.is_available,
+            sizeOptions: product.size_options || {small: {enabled: false, price: 0}, medium: {enabled: true, price: 65000}, large: {enabled: true, price: 69000}},
         };
 
         return NextResponse.json(transformedProduct);
@@ -83,7 +84,6 @@ export async function PUT(
         // Only update provided fields
         if (body.name !== undefined) updateData.name = body.name;
         if (body.description !== undefined) updateData.description = body.description;
-        if (body.basePrice !== undefined) updateData.base_price = body.basePrice;
         if (body.category !== undefined) updateData.category = body.category;
         if (body.categoryId !== undefined) updateData.category_id = body.categoryId;
         if (body.image !== undefined) updateData.image = body.image;
@@ -96,7 +96,7 @@ export async function PUT(
             .from('products')
             .update(updateData)
             .eq('id', id)
-            .select('id, name, description, base_price, category, category_id, image, is_popular, is_new, is_available, size_options')
+            .select('id, name, description, category, category_id, image, is_popular, is_new, is_available, size_options')
             .single();
 
         if (error) {
@@ -109,7 +109,6 @@ export async function PUT(
             id: product.id,
             name: product.name,
             description: product.description,
-            basePrice: Number(product.base_price),
             category: product.category,
             categoryId: product.category_id,
             image: product.image || null,

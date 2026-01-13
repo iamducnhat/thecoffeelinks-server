@@ -14,7 +14,6 @@ export async function GET(request: Request) {
                 id, 
                 name, 
                 description, 
-                base_price, 
                 category_id,
                 categories (
                     name,
@@ -41,7 +40,6 @@ export async function GET(request: Request) {
                         id, 
                         name, 
                         description, 
-                        base_price, 
                         category_id,
                         categories!inner (
                             name,
@@ -96,7 +94,6 @@ export async function GET(request: Request) {
                 id: p.id,
                 name: p.name,
                 description: p.description,
-                base_price: Number(p.base_price),
                 category: category?.name || 'Uncategorized',
                 categoryId: p.category_id,
                 categoryType: category?.type,
@@ -169,15 +166,10 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Product name is required (min 2 characters)' }, { status: 400 });
         }
 
-        if (body.basePrice !== undefined && (typeof body.basePrice !== 'number' || body.basePrice < 0)) {
-            return NextResponse.json({ error: 'Invalid base price' }, { status: 400 });
-        }
-
         const newProduct = {
             id: body.id || body.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
             name: body.name.trim(),
             description: body.description?.trim() || null,
-            base_price: body.basePrice || 0,
             category_id: body.categoryId,
             image: body.image || null,
             is_popular: body.isPopular || false,
@@ -193,7 +185,6 @@ export async function POST(request: Request) {
                 id, 
                 name, 
                 description, 
-                base_price, 
                 category_id,
                 categories(name, type), 
                 image, 
@@ -215,7 +206,6 @@ export async function POST(request: Request) {
             id: product.id,
             name: product.name,
             description: product.description,
-            basePrice: Number(product.base_price),
             category: category?.name || 'Uncategorized',
             categoryId: product.category_id,
             categoryType: category?.type,

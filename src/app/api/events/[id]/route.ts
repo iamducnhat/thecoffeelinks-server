@@ -29,6 +29,7 @@ export async function GET(
             description: event.description,
             date: event.date,
             storeId: event.store_id,
+            hostName: event.host_name,
             bg: event.bg,
             icon: event.icon,
             imageURL: event.image_url,
@@ -62,6 +63,7 @@ export async function PUT(
         if (body.description !== undefined) updateData.description = body.description;
         if (body.date !== undefined) updateData.date = body.date;
         if (body.storeId !== undefined) updateData.store_id = body.storeId;
+        if (body.hostName !== undefined) updateData.host_name = body.hostName;
         if (body.bg !== undefined) updateData.bg = body.bg;
         if (body.icon !== undefined) updateData.icon = body.icon;
         if (body.imageURL !== undefined || body.image_url !== undefined) {
@@ -90,6 +92,7 @@ export async function PUT(
             description: event.description,
             date: event.date,
             storeId: event.store_id,
+            hostName: event.host_name,
             bg: event.bg,
             icon: event.icon,
             imageURL: event.image_url,
