@@ -120,7 +120,7 @@ export async function POST(request: Request) {
                 expiresAt: paymentRecord.expiresAt,
             },
             // Include mode in response so clients know this is sandbox/test
-            _mode: paymentMode !== 'production' ? paymentMode : undefined,
+            _mode: paymentMode,
         });
 
     } catch (error: any) {
