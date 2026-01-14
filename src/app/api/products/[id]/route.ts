@@ -91,12 +91,13 @@ export async function PUT(
         if (body.isNew !== undefined) updateData.is_new = body.isNew;
         if (body.isAvailable !== undefined) updateData.is_available = body.isAvailable;
         if (body.sizeOptions !== undefined) updateData.size_options = body.sizeOptions;
+        if (body.availableToppings !== undefined) updateData.available_toppings = body.availableToppings;
 
         const { data: product, error } = await supabaseAdmin
             .from('products')
             .update(updateData)
             .eq('id', id)
-            .select('id, name, description, category, category_id, image, is_popular, is_new, is_available, size_options')
+            .select('id, name, description, category, category_id, image, is_popular, is_new, is_available, size_options, available_toppings')
             .single();
 
         if (error) {
@@ -115,6 +116,7 @@ export async function PUT(
             isPopular: product.is_popular,
             isNew: product.is_new,
             isAvailable: product.is_available,
+            availableToppings: product.available_toppings || [],
             sizeOptions: product.size_options || {small: {enabled: false, price: 0}, medium: {enabled: true, price: 65000}, large: {enabled: true, price: 69000}},
         };
 

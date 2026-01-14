@@ -23,7 +23,8 @@ export async function GET(request: Request) {
                 is_popular, 
                 is_new, 
                 is_available,
-                size_options
+                size_options,
+                available_toppings
             `);
 
         // Filter by category if provided
@@ -49,7 +50,8 @@ export async function GET(request: Request) {
                         is_popular, 
                         is_new, 
                         is_available,
-                        size_options
+                        size_options,
+                        available_toppings
                     `)
                     .eq('categories.name', category);
             }
@@ -101,6 +103,7 @@ export async function GET(request: Request) {
                 is_popular: p.is_popular,
                 is_new: p.is_new,
                 is_available: p.is_available,
+                availableToppings: p.available_toppings || [],
                 sizeOptions: p.size_options || {small: {enabled: false, price: 0}, medium: {enabled: true, price: 65000}, large: {enabled: true, price: 69000}},
             };
         }) || [];
@@ -175,6 +178,7 @@ export async function POST(request: Request) {
             is_popular: body.isPopular || false,
             is_new: body.isNew || false,
             is_available: body.isAvailable !== false,
+            available_toppings: body.availableToppings || [],
             size_options: body.sizeOptions || {small: {enabled: false, price: 0}, medium: {enabled: true, price: 65000}, large: {enabled: true, price: 69000}},
         };
 
@@ -191,7 +195,8 @@ export async function POST(request: Request) {
                 is_popular, 
                 is_new, 
                 is_available,
-                size_options
+                size_options,
+                available_toppings
             `)
             .single();
 
@@ -212,6 +217,7 @@ export async function POST(request: Request) {
             image: product.image || null,
             isPopular: product.is_popular,
             isNew: product.is_new,
+            availableToppings: product.available_toppings || [],
             sizeOptions: product.size_options || {small: {enabled: false, price: 0}, medium: {enabled: true, price: 65000}, large: {enabled: true, price: 69000}},
         };
 

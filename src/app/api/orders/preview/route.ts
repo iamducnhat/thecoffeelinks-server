@@ -1,60 +1,74 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
-// Helper types
+// Helper types matching Swift OrderPreviewRequest
 type PreviewRequest = {
-    product_id: string;
+    productId: string;
     size: string; // e.g. 'S', 'M', 'L'
     ice?: string;
     sugar?: string;
     toppings: string[]; // List of topping IDs
     quantity: number;
-    voucher_id?: string | null;
+    voucherId?: string | null;
 };
+
+// Size options structure from database
+type SizeOption = {
+    enabled: boolean;
+    price: number;
+};
+
+type SizeOptions = {
+    small: SizeOption;
+    medium: SizeOption;
+    large: SizeOption;
+};
+
+// Map size code to size_options key
+function getSizeKey(size: string): keyof SizeOptions {
+    switch (size.toUpperCase()) {
+        case 'S': return 'small';
+        case 'M': return 'medium';
+        case 'L': return 'large';
+        default: return 'medium';
+    }
+}
 
 export async function POST(request: Request) {
     try {
         const body: PreviewRequest = await request.json();
-        const { product_id, size, toppings, quantity, voucher_id } = body;
+        const { productId, size, toppings, quantity, voucherId } = body;
 
-        if (!product_id || !quantity) {
-            return NextResponse.json({ error: 'Missing product_id or quantity' }, { status: 400 });
+        if (!productId || !quantity) {
+            return NextResponse.json({ error: 'Missing productId or quantity' }, { status: 400 });
         }
 
-        // 1. Fetch Product Base Price
+        // 1. Fetch Product with size_options (base_price has been removed)
         const { data: product, error: productError } = await supabaseAdmin
             .from('products')
-            .select('base_price')
-            .eq('id', product_id)
+            .select('id, name, size_options')
+            .eq('id', productId)
             .single();
 
         if (productError || !product) {
             return NextResponse.json({ error: 'Product not found' }, { status: 404 });
         }
 
-        let unitPrice = Number(product.base_price);
+        // 2. Get price from product's size_options
+        const sizeOptions: SizeOptions = product.size_options || {
+            small: { enabled: false, price: 0 },
+            medium: { enabled: true, price: 65000 },
+            large: { enabled: true, price: 69000 }
+        };
 
-        // 2. Fetch Size Modifier
-        // If size modifiers are in DB, fetch them. For now, we might need to hardcode if table access is tricky or just fetch all.
-        // Let's assume 'size_modifiers' table exists as seen in 'products/route.ts'
-        let sizePrice = 0;
-        if (size) {
-            const { data: sizeMod, error: sizeError } = await supabaseAdmin
-                .from('size_modifiers')
-                .select('price')
-                .eq('id', size.toUpperCase()) // assuming ID is 'S', 'M', 'L'
-                .single();
+        const sizeKey = getSizeKey(size || 'M');
+        const selectedSizeOption = sizeOptions[sizeKey];
 
-            if (!sizeError && sizeMod) {
-                sizePrice = Number(sizeMod.price);
-            } else {
-                // Fallback if DB lookup fails (though it shouldn't if configured)
-                if (size === 'L') sizePrice = 10000;
-                if (size === 'M') sizePrice = 5000;
-            }
+        if (!selectedSizeOption.enabled) {
+            return NextResponse.json({ error: `Size ${size} is not available for this product` }, { status: 400 });
         }
 
-        unitPrice += sizePrice;
+        let unitPrice = Number(selectedSizeOption.price);
 
         // 3. Toppings Price
         let toppingsPrice = 0;
@@ -74,23 +88,16 @@ export async function POST(request: Request) {
         // 4. Calculate Subtotal
         const subtotal = unitPrice * quantity;
 
-        // 5. Vouchers (Placeholder logical)
+        // 5. Vouchers (Placeholder logic)
         let discount = 0;
-        if (voucher_id) {
+        if (voucherId) {
             // TODO: Lookup voucher and apply discount
             // For now, return 0 discount
         }
 
-        // 6. Tax (e.g., 8% or 10%)
+        // 6. Tax (8% - prices are tax-exclusive in this system)
         const taxRate = 0.08;
         const tax = Math.round(subtotal * taxRate);
-        const total = subtotal + tax; // Or maybe subtotal is inclusive? usually menu prices in VN are tax inclusive? 
-        // Requirement says: "Returns subtotal, discount, tax, total".
-        // Let's assume prices are tax-exclusive for this calculation demo, or tax is just extracted.
-        // If prices are inclusive: Total = Subtotal. Tax = Total - (Total / 1.08).
-        // Let's assume inclusive for "The Coffee Links" context (common in VN F&B).
-        // BUT Payload example in prompt: "Subtotal: 98000, Tax: 8000, Total: 106000" -> This implies Exclusive. 98k + 8k = 106k.
-        // So we add tax.
 
         return NextResponse.json({
             subtotal,
