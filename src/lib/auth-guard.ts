@@ -17,6 +17,12 @@ export async function verifyAdminAccess(request: Request): Promise<AuthResult> {
         return { authorized: true, role: 'admin', userId: 'system-admin' };
     }
 
+    if (!adminKey) {
+        logger.security('Admin Access Denied: Missing X-Admin-Key', { requestId });
+    } else if (adminKey !== adminSecret) {
+        logger.security('Admin Access Denied: Invalid X-Admin-Key', { requestId });
+    }
+
     const authHeader = request.headers.get('Authorization');
     if (authHeader) {
         const token = authHeader.replace('Bearer ', '');
