@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { verifyStaffAccess } from '@/lib/auth-guard';
 
 // GET /api/staff/orders
 // Fetch orders with optional status filter, pagination, and date range
@@ -8,6 +9,11 @@ const MAX_LIMIT = 200;
 
 export async function GET(request: Request) {
     try {
+        const { authorized, error: authError } = await verifyStaffAccess(request);
+        if (!authorized) {
+            return NextResponse.json({ error: authError }, { status: 401 });
+        }
+
         const { searchParams } = new URL(request.url);
         const statusParam = searchParams.get('status'); // e.g. "received,preparing"
         const limitParam = searchParams.get('limit');
@@ -15,12 +21,12 @@ export async function GET(request: Request) {
         const dateFrom = searchParams.get('from'); // ISO date string
         const dateTo = searchParams.get('to'); // ISO date string
         const todayOnly = searchParams.get('today') === 'true';
-        
+
         // Parse and validate limit
         let limit = limitParam ? parseInt(limitParam, 10) : DEFAULT_LIMIT;
         if (isNaN(limit) || limit < 1) limit = DEFAULT_LIMIT;
         if (limit > MAX_LIMIT) limit = MAX_LIMIT;
-        
+
         // Parse offset
         let offset = offsetParam ? parseInt(offsetParam, 10) : 0;
         if (isNaN(offset) || offset < 0) offset = 0;
@@ -38,7 +44,7 @@ export async function GET(request: Request) {
                 query = query.in('status', statuses);
             }
         }
-        
+
         // Filter by date range
         if (todayOnly) {
             const today = new Date();
@@ -59,7 +65,7 @@ export async function GET(request: Request) {
             throw error;
         }
 
-        return NextResponse.json({ 
+        return NextResponse.json({
             orders,
             pagination: {
                 total: count,
@@ -73,3 +79,4 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+

@@ -36,8 +36,16 @@ function getSizeKey(size: string): keyof SizeOptions {
 
 export async function POST(request: Request) {
     try {
-        const body: PreviewRequest = await request.json();
-        const { productId, size, toppings, quantity, voucherId } = body;
+        const body = await request.json();
+        
+        // Handle both camelCase (from Swift) and snake_case (from web)
+        const productId = body.productId || body.product_id;
+        const size = body.size;
+        const toppings = body.toppings || [];
+        const quantity = body.quantity;
+        const voucherId = body.voucherId || body.voucher_id;
+        const ice = body.ice;
+        const sugar = body.sugar;
 
         if (!productId || !quantity) {
             return NextResponse.json({ error: 'Missing productId or quantity' }, { status: 400 });

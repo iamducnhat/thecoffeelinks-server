@@ -1,11 +1,34 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { verifyAdminAccess } from '@/lib/auth-guard';
+import { getStorageUrl, DEFAULT_SIZE_OPTIONS, formatProductSlug } from '@/lib/utils';
+import { ProductSchema } from '@/lib/schemas';
+import { validateRequest } from '@/lib/validation';
+
+interface Category {
+    name: string;
+    type: string;
+}
+
+interface Product {
+    id: string;
+    name: string;
+    description: string | null;
+    category_id: string;
+    categories: Category | Category[] | null; // Join can return array or single object depending on query
+    image: string | null;
+    is_popular: boolean;
+    is_new: boolean;
+    is_available: boolean;
+    size_options: any; // Ideally stricter type
+    available_toppings: string[];
+}
 
 // GET: Fetch all products with optional category filter
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
-        const category = searchParams.get('category');
+        const categoryParam = searchParams.get('category');
 
         // Build query - including image field for display
         let query = supabaseAdmin
@@ -28,10 +51,10 @@ export async function GET(request: Request) {
             `);
 
         // Filter by category if provided
-        if (category && category !== 'all') {
+        if (categoryParam && categoryParam !== 'all') {
             // Check if UUID
-            if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(category)) {
-                query = query.eq('category_id', category);
+            if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categoryParam)) {
+                query = query.eq('category_id', categoryParam);
             } else {
                 // Filter by joined category name reference
                 // Use !inner to ensure filtering works on joined table
@@ -53,7 +76,7 @@ export async function GET(request: Request) {
                         size_options,
                         available_toppings
                     `)
-                    .eq('categories.name', category);
+                    .eq('categories.name', categoryParam);
             }
         }
 
@@ -90,21 +113,22 @@ export async function GET(request: Request) {
         });
 
         // Transform products to match expected frontend format
-        const transformedProducts = products?.map((p: any) => {
-            const category = p.categories as unknown as { name: string; type: string } | null;
+        const transformedProducts = (products as unknown as Product[])?.map((p) => {
+            const categoryData = Array.isArray(p.categories) ? p.categories[0] : p.categories;
+
             return {
                 id: p.id,
                 name: p.name,
                 description: p.description,
-                category: category?.name || 'Uncategorized',
+                category: categoryData?.name || 'Uncategorized',
                 categoryId: p.category_id,
-                categoryType: category?.type,
-                image: p.image ? (p.image.startsWith('http') ? p.image : `https://ggikmpqyhkfhctwqbytk.supabase.co/storage/v1/object/public/${p.image}`) : null,
+                categoryType: categoryData?.type,
+                image: getStorageUrl(p.image),
                 is_popular: p.is_popular,
                 is_new: p.is_new,
                 is_available: p.is_available,
                 availableToppings: p.available_toppings || [],
-                sizeOptions: p.size_options || {small: {enabled: false, price: 0}, medium: {enabled: true, price: 65000}, large: {enabled: true, price: 69000}},
+                sizeOptions: p.size_options || DEFAULT_SIZE_OPTIONS,
             };
         }) || [];
 
@@ -130,47 +154,25 @@ export async function GET(request: Request) {
     }
 }
 
-// Helper to verify admin access
-async function verifyAdminAccess(request: Request): Promise<{ authorized: boolean; error?: string }> {
-    const adminKey = request.headers.get('X-Admin-Key');
-    const adminSecret = process.env.ADMIN_SECRET;
-
-    if (adminKey && adminSecret && adminKey === adminSecret) {
-        return { authorized: true };
-    }
-
-    const authHeader = request.headers.get('Authorization');
-    if (authHeader) {
-        const token = authHeader.replace('Bearer ', '');
-        try {
-            const { data, error } = await supabaseAdmin.auth.getUser(token);
-            if (!error && data.user) {
-                return { authorized: true };
-            }
-        } catch { }
-    }
-
-    return { authorized: false, error: 'Admin access required' };
-}
-
 // POST: Create a new product (Admin only)
 export async function POST(request: Request) {
     try {
         // Verify admin access
-        const { authorized, error: authError } = await verifyAdminAccess(request);
-        if (!authorized) {
-            return NextResponse.json({ error: authError }, { status: 401 });
+        const authResult = await verifyAdminAccess(request);
+        if (!authResult.authorized) {
+            return NextResponse.json({ error: authResult.error }, { status: 401 });
         }
 
-        const body = await request.json();
-
-        // Input validation
-        if (!body.name || typeof body.name !== 'string' || body.name.length < 2) {
-            return NextResponse.json({ error: 'Product name is required (min 2 characters)' }, { status: 400 });
+        // Validate Request Body
+        const validation = await validateRequest(request, ProductSchema);
+        if (!validation.success) {
+            return NextResponse.json({ error: validation.error }, { status: 400 });
         }
+
+        const body = validation.data!; // Safe because success is true
 
         const newProduct = {
-            id: body.id || body.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+            id: formatProductSlug(body.name, body.id),
             name: body.name.trim(),
             description: body.description?.trim() || null,
             category_id: body.categoryId,
@@ -179,7 +181,7 @@ export async function POST(request: Request) {
             is_new: body.isNew || false,
             is_available: body.isAvailable !== false,
             available_toppings: body.availableToppings || [],
-            size_options: body.sizeOptions || {small: {enabled: false, price: 0}, medium: {enabled: true, price: 65000}, large: {enabled: true, price: 69000}},
+            size_options: body.sizeOptions || DEFAULT_SIZE_OPTIONS,
         };
 
         const { data: product, error } = await supabaseAdmin
@@ -206,19 +208,21 @@ export async function POST(request: Request) {
         }
 
         // Transform response to match frontend format
-        const category = product.categories as unknown as { name: string; type: string } | null;
+        const p = product as unknown as Product;
+        const categoryData = Array.isArray(p.categories) ? p.categories[0] : p.categories;
+
         const transformedProduct = {
-            id: product.id,
-            name: product.name,
-            description: product.description,
-            category: category?.name || 'Uncategorized',
-            categoryId: product.category_id,
-            categoryType: category?.type,
-            image: product.image || null,
-            isPopular: product.is_popular,
-            isNew: product.is_new,
-            availableToppings: product.available_toppings || [],
-            sizeOptions: product.size_options || {small: {enabled: false, price: 0}, medium: {enabled: true, price: 65000}, large: {enabled: true, price: 69000}},
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            category: categoryData?.name || 'Uncategorized',
+            categoryId: p.category_id,
+            categoryType: categoryData?.type,
+            image: p.image || null,
+            isPopular: p.is_popular,
+            isNew: p.is_new,
+            availableToppings: p.available_toppings || [],
+            sizeOptions: p.size_options || DEFAULT_SIZE_OPTIONS,
         };
 
         return NextResponse.json({ success: true, product: transformedProduct });
@@ -227,3 +231,5 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
+

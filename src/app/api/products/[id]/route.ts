@@ -1,28 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-
-// Helper to verify admin access
-async function verifyAdminAccess(request: Request): Promise<{ authorized: boolean; error?: string }> {
-    const adminKey = request.headers.get('X-Admin-Key');
-    const adminSecret = process.env.ADMIN_SECRET;
-    
-    if (adminKey && adminSecret && adminKey === adminSecret) {
-        return { authorized: true };
-    }
-    
-    const authHeader = request.headers.get('Authorization');
-    if (authHeader) {
-        const token = authHeader.replace('Bearer ', '');
-        try {
-            const { data, error } = await supabaseAdmin.auth.getUser(token);
-            if (!error && data.user) {
-                return { authorized: true };
-            }
-        } catch {}
-    }
-    
-    return { authorized: false, error: 'Admin access required' };
-}
+import { verifyAdminAccess } from '@/lib/auth-guard';
+import { getStorageUrl, DEFAULT_SIZE_OPTIONS } from '@/lib/utils';
 
 // GET: Fetch a single product by ID (Public)
 export async function GET(
@@ -50,11 +29,11 @@ export async function GET(
             description: product.description,
             category: product.category,
             categoryId: product.category_id,
-            image: product.image || null,
+            image: getStorageUrl(product.image),
             isPopular: product.is_popular,
             isNew: product.is_new,
             isAvailable: product.is_available,
-            sizeOptions: product.size_options || {small: {enabled: false, price: 0}, medium: {enabled: true, price: 65000}, large: {enabled: true, price: 69000}},
+            sizeOptions: product.size_options || DEFAULT_SIZE_OPTIONS,
         };
 
         return NextResponse.json(transformedProduct);
@@ -75,7 +54,7 @@ export async function PUT(
         if (!authorized) {
             return NextResponse.json({ error: authError }, { status: 401 });
         }
-        
+
         const { id } = await params;
         const body = await request.json();
 
@@ -112,12 +91,12 @@ export async function PUT(
             description: product.description,
             category: product.category,
             categoryId: product.category_id,
-            image: product.image || null,
+            image: getStorageUrl(product.image),
             isPopular: product.is_popular,
             isNew: product.is_new,
             isAvailable: product.is_available,
             availableToppings: product.available_toppings || [],
-            sizeOptions: product.size_options || {small: {enabled: false, price: 0}, medium: {enabled: true, price: 65000}, large: {enabled: true, price: 69000}},
+            sizeOptions: product.size_options || DEFAULT_SIZE_OPTIONS,
         };
 
         return NextResponse.json({ success: true, product: transformedProduct });
@@ -146,7 +125,7 @@ export async function DELETE(
         if (!authorized) {
             return NextResponse.json({ error: authError }, { status: 401 });
         }
-        
+
         const { id } = await params;
 
         const { error } = await supabaseAdmin
@@ -165,3 +144,4 @@ export async function DELETE(
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+

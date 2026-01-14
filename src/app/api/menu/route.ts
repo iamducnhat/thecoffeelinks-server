@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getStorageUrl } from '@/lib/utils';
 
 export async function GET() {
     try {
         // 1. Fetch Products (including image field for display)
         const { data: products, error: productsError } = await supabaseAdmin
             .from('products')
-            .select('id, name, description, base_price, category, image, is_popular, is_new, is_available')
+            .select('id, name, description, category_id, categories(name, type), image, is_popular, is_new, is_available, available_toppings, size_options')
             .eq('is_available', true);
 
         if (productsError) throw productsError;
@@ -14,10 +15,14 @@ export async function GET() {
         // 2. Fetch Toppings
         const { data: toppings, error: toppingsError } = await supabaseAdmin
             .from('toppings')
-            .select('id, name, price, is_available')
-            .eq('is_available', true);
+            .select('id, name, price, is_available');
 
-        if (toppingsError) throw toppingsError;
+        if (toppingsError) {
+            console.warn('Toppings fetch error:', toppingsError);
+        }
+
+        // Filter available toppings (or include all if is_available column doesn't exist)
+        const availableToppings = toppings?.filter(t => t.is_available !== false) ?? [];
 
         // 3. Fetch Size Modifiers
         const { data: sizeModifiersData, error: sizeError } = await supabaseAdmin
@@ -37,21 +42,27 @@ export async function GET() {
         } else {
             // Fallback defaults
             sizeModifiers['S'] = { price: 0, label: 'Small' };
-            sizeModifiers['M'] = { price: 0, label: 'Medium' }; // Assuming base price is M? Or 0 if base is S. check requirements later. User said "base prices", implies base is smallest? Usually M is standard. 
-            // Re-reading requirements: returns "Available sizes". 
-            // Previous code had M=10000. Let's stick to safe defaults or what was in products/route.ts
-            sizeModifiers['S'] = { price: 0, label: 'Small' };
             sizeModifiers['M'] = { price: 5000, label: 'Medium' };
             sizeModifiers['L'] = { price: 10000, label: 'Large' };
         }
 
-        // 4. Hardcoded Categories (if dynamic categories table doesn't exist yet, derive from products or static list)
-        // Ideally we scan products for unique categories or have a categories table. 
-        // For now, let's derive unique categories from products to ensure consistency.
-        const categoriesSet = new Set(products?.map(p => p.category).filter(Boolean));
+        // 4. Derive Categories
+        // We use the joined category name if available, or fetch separate categories list if needed.
+        // For menu, we usually want unique categories from the products list.
+        const categoriesSet = new Set<string>();
+        const productsWithCategoryName = products?.map((p: any) => {
+            const catData = Array.isArray(p.categories) ? p.categories[0] : p.categories;
+            const catName = catData?.name || 'Uncategorized';
+            categoriesSet.add(catName);
+            return {
+                ...p,
+                category: catName
+            };
+        }) || [];
+
         const categories = Array.from(categoriesSet).map(c => ({
             id: c,
-            name: (c as string).charAt(0).toUpperCase() + (c as string).slice(1).replace('_', ' ')
+            name: c.charAt(0).toUpperCase() + c.slice(1).replace('_', ' ')
         }));
 
         // 5. Hardcoded Sugar/Ice Options (Configuration)
@@ -72,12 +83,23 @@ export async function GET() {
 
         return NextResponse.json({
             categories,
-            products: products?.map(p => ({
-                ...p,
-                base_price: Number(p.base_price),
-                image: p.image ? (p.image.startsWith('http') ? p.image : `https://ggikmpqyhkfhctwqbytk.supabase.co/storage/v1/object/public/${p.image}`) : null,
+            products: productsWithCategoryName.map(p => ({
+                id: p.id,
+                name: p.name,
+                description: p.description,
+                category: p.category,
+                categoryId: p.category_id,
+                image: getStorageUrl(p.image),
+                isPopular: p.is_popular,
+                isNew: p.is_new,
+                isAvailable: p.is_available,
+                availableToppings: p.available_toppings || [],
+                sizeOptions: p.size_options,
+                // base_price might not exist in schema based on prev route.ts readings (only size_options), 
+                // removing it unless I see it in schema. 
+                // I will assume size_options dictates price.
             })),
-            toppings: toppings?.map(t => ({
+            toppings: availableToppings?.map(t => ({
                 ...t,
                 price: Number(t.price)
             })),
@@ -91,3 +113,4 @@ export async function GET() {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+

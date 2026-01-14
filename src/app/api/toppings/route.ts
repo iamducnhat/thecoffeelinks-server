@@ -1,28 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-
-// Helper to verify admin access
-async function verifyAdminAccess(request: Request): Promise<{ authorized: boolean; error?: string }> {
-    const adminKey = request.headers.get('X-Admin-Key');
-    const adminSecret = process.env.ADMIN_SECRET;
-
-    if (adminKey && adminSecret && adminKey === adminSecret) {
-        return { authorized: true };
-    }
-
-    const authHeader = request.headers.get('Authorization');
-    if (authHeader) {
-        const token = authHeader.replace('Bearer ', '');
-        try {
-            const { data, error } = await supabaseAdmin.auth.getUser(token);
-            if (!error && data.user) {
-                return { authorized: true };
-            }
-        } catch { }
-    }
-
-    return { authorized: false, error: 'Admin access required' };
-}
+import { verifyAdminAccess } from '@/lib/auth-guard';
+import { formatProductSlug } from '@/lib/utils';
+import { ToppingSchema } from '@/lib/schemas';
+import { validateRequest } from '@/lib/validation';
 
 // GET: Fetch all toppings
 export async function GET(request: Request) {
@@ -48,23 +29,20 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         // Verify admin access
-        const { authorized, error: authError } = await verifyAdminAccess(request);
-        if (!authorized) {
-            return NextResponse.json({ error: authError }, { status: 401 });
+        const authResult = await verifyAdminAccess(request);
+        if (!authResult.authorized) {
+            return NextResponse.json({ error: authResult.error }, { status: 401 });
         }
 
-        const body = await request.json();
-
-        if (!body.name || typeof body.name !== 'string' || body.name.length < 2) {
-            return NextResponse.json({ error: 'Topping name is required (min 2 characters)' }, { status: 400 });
+        const validation = await validateRequest(request, ToppingSchema);
+        if (!validation.success) {
+            return NextResponse.json({ error: validation.error }, { status: 400 });
         }
 
-        if (typeof body.price !== 'number' || body.price < 0) {
-            return NextResponse.json({ error: 'Price must be a non-negative number' }, { status: 400 });
-        }
+        const body = validation.data!;
 
         const newTopping = {
-            id: body.id || body.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+            id: formatProductSlug(body.name, body.id),
             name: body.name.trim(),
             price: body.price,
             is_available: body.is_available !== false,
@@ -87,3 +65,5 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
+

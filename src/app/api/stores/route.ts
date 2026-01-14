@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { verifyAdminAccess } from '@/lib/auth-guard';
+import { StoreSchema } from '@/lib/schemas';
+import { validateRequest } from '@/lib/validation';
 
 // GET: List all stores
 export async function GET() {
@@ -23,8 +26,8 @@ export async function GET() {
             longitude: s.longitude ?? 0,
             imageUrl: s.image || s.image_url || null,
             phoneNumber: s.phone || s.phone_number || null,
-            openingHours: s.opening_time && s.closing_time 
-                ? `${s.opening_time} - ${s.closing_time}` 
+            openingHours: s.opening_time && s.closing_time
+                ? `${s.opening_time} - ${s.closing_time}`
                 : (s.opening_hours || null),
         })) || [];
 
@@ -38,24 +41,29 @@ export async function GET() {
 // POST: Create a new store
 export async function POST(request: Request) {
     try {
-        const body = await request.json();
-        const { name, address, phone, opening_time, closing_time, latitude, longitude, is_active } = body;
-
-        if (!name || !address) {
-            return NextResponse.json({ error: 'Name and address are required' }, { status: 400 });
+        const authResult = await verifyAdminAccess(request);
+        if (!authResult.authorized) {
+            return NextResponse.json({ error: authResult.error }, { status: 401 });
         }
+
+        const validation = await validateRequest(request, StoreSchema);
+        if (!validation.success) {
+            return NextResponse.json({ error: validation.error }, { status: 400 });
+        }
+
+        const body = validation.data!;
 
         const { data: store, error } = await supabaseAdmin
             .from('stores')
             .insert({
-                name,
-                address,
-                phone,
-                opening_time,
-                closing_time,
-                latitude,
-                longitude,
-                is_active: is_active !== undefined ? is_active : true
+                name: body.name,
+                address: body.address,
+                phone: body.phone,
+                opening_time: body.opening_time,
+                closing_time: body.closing_time,
+                latitude: body.latitude,
+                longitude: body.longitude,
+                is_active: body.is_active !== undefined ? body.is_active : true
             })
             .select()
             .single();
@@ -71,3 +79,5 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
+

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { verifyAdminAccess } from '@/lib/auth-guard';
+import { CategorySchema } from '@/lib/schemas';
+import { validateRequest } from '@/lib/validation';
 
 // GET: List all categories
 export async function GET() {
@@ -23,11 +26,17 @@ export async function GET() {
 // POST: Create a new category
 export async function POST(request: Request) {
     try {
-        const body = await request.json();
-
-        if (!body.name || !body.type) {
-            return NextResponse.json({ error: 'Name and type are required' }, { status: 400 });
+        const authResult = await verifyAdminAccess(request);
+        if (!authResult.authorized) {
+            return NextResponse.json({ error: authResult.error }, { status: 401 });
         }
+
+        const validation = await validateRequest(request, CategorySchema);
+        if (!validation.success) {
+            return NextResponse.json({ error: validation.error }, { status: 400 });
+        }
+
+        const body = validation.data!;
 
         const { data, error } = await supabaseAdmin
             .from('categories')
@@ -47,3 +56,5 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
+
+
