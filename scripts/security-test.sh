@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BASE_URL="http://localhost:3000/api"
+BASE_URL="https://server-nu-three-90.vercel.app/api"
 echo "Testing Security on $BASE_URL..."
 
 # 1. Test Security Headers

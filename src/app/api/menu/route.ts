@@ -12,17 +12,31 @@ export async function GET() {
 
         if (productsError) throw productsError;
 
-        // 2. Fetch Toppings
-        const { data: toppings, error: toppingsError } = await supabaseAdmin
-            .from('toppings')
-            .select('id, name, price, is_available');
-
-        if (toppingsError) {
-            console.warn('Toppings fetch error:', toppingsError);
+        // 2. Fetch Toppings - try simple query first
+        let toppings = null;
+        let toppingsError = null;
+        
+        try {
+            const result = await supabaseAdmin
+                .from('toppings')
+                .select('*');
+            
+            toppings = result.data;
+            toppingsError = result.error;
+            
+            console.log(`Toppings fetch result:`, {
+                count: toppings?.length,
+                error: toppingsError?.message,
+                data: toppings?.length ? toppings[0] : null
+            });
+        } catch (err) {
+            console.error('Toppings fetch exception:', err);
+            toppingsError = err as any;
         }
 
         // Filter available toppings (or include all if is_available column doesn't exist)
         const availableToppings = toppings?.filter(t => t.is_available !== false) ?? [];
+        console.log(`Menu endpoint: returning ${availableToppings.length} available toppings`);
 
         // 3. Fetch Size Modifiers
         const { data: sizeModifiersData, error: sizeError } = await supabaseAdmin
