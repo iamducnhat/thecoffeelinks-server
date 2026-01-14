@@ -27,13 +27,14 @@ async function verifyAdminAccess(request: Request): Promise<{ authorized: boolea
 // GET: Fetch a specific topping
 export async function GET(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params;
         const { data, error } = await supabaseAdmin
             .from('toppings')
             .select('*')
-            .eq('id', params.id)
+            .eq('id', id)
             .single();
 
         if (error) {
@@ -51,9 +52,10 @@ export async function GET(
 // PUT: Update a topping
 export async function PUT(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params;
         // Verify admin access
         const { authorized, error: authError } = await verifyAdminAccess(request);
         if (!authorized) {
@@ -84,7 +86,7 @@ export async function PUT(
         const { data: topping, error } = await supabaseAdmin
             .from('toppings')
             .update(updates)
-            .eq('id', params.id)
+            .eq('id', id)
             .select()
             .single();
 
@@ -103,9 +105,10 @@ export async function PUT(
 // DELETE: Delete a topping
 export async function DELETE(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params;
         // Verify admin access
         const { authorized, error: authError } = await verifyAdminAccess(request);
         if (!authorized) {
@@ -115,7 +118,7 @@ export async function DELETE(
         const { error } = await supabaseAdmin
             .from('toppings')
             .delete()
-            .eq('id', params.id);
+            .eq('id', id);
 
         if (error) {
             console.error('Topping delete error:', error);
