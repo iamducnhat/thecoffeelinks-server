@@ -15,15 +15,18 @@ export async function GET() {
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        // Transform to frontend format
+        // Transform to frontend format - matching Swift Voucher model
+        // Swift expects: id, code, type, value, description, minSpend, expiresAt, isUsed, imageUrl
         const transformedVouchers = vouchers?.map((v: any) => ({
+            id: v.id,
             code: v.code,
-            discount_percent: v.discount_percent,
-            discount: v.discount_amount,
+            type: v.type || (v.discount_percent ? 'percent' : 'fixed'),
+            value: v.discount_percent || v.discount_amount || 0,
             description: v.description,
-            min_order: v.min_order,
-            max_discount: v.max_discount,
-            is_active: v.is_active,
+            minSpend: v.min_order || 0,
+            expiresAt: v.expires_at,
+            isUsed: v.is_used || false,
+            imageUrl: v.image_url || null,
         })) || [];
 
         return NextResponse.json({ vouchers: transformedVouchers });

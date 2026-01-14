@@ -20,16 +20,21 @@ export async function GET(
             return NextResponse.json({ error: 'Voucher not found' }, { status: 404 });
         }
 
-        // Transform to frontend format
+        // Transform to frontend format - matching Swift Voucher model
         const transformedVoucher = {
+            id: voucher.id,
             code: voucher.code,
+            type: voucher.type || (voucher.discount_percent ? 'percent' : 'fixed'),
+            value: voucher.discount_percent || voucher.discount_amount || 0,
             discountPercent: voucher.discount_percent,
             discount: voucher.discount_amount,
             description: voucher.description,
             minOrder: voucher.min_order,
+            minSpend: voucher.min_order,
             maxDiscount: voucher.max_discount,
             isActive: voucher.is_active,
             expiresAt: voucher.expires_at,
+            imageUrl: voucher.image_url,
         };
 
         return NextResponse.json(transformedVoucher);
@@ -60,6 +65,7 @@ export async function PUT(
         if (body.maxDiscount !== undefined) updateData.max_discount = body.maxDiscount;
         if (body.isActive !== undefined) updateData.is_active = body.isActive;
         if (body.expiresAt !== undefined) updateData.expires_at = body.expiresAt;
+        if (body.imageUrl !== undefined) updateData.image_url = body.imageUrl;
 
         const { data: voucher, error } = await supabaseAdmin
             .from('vouchers')
