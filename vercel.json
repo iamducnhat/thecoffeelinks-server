@@ -2,23 +2,23 @@
   "crons": [
     {
       "path": "/api/cron/finalize-orders",
-      "schedule": "0 0 * * *"
+      "schedule": "*/1 * * * *"
     },
     {
       "path": "/api/cron/update-popularity",
-      "schedule": "0 1 * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/cleanup-presence",
-      "schedule": "0 2 * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/cleanup-expired-checkins",
-      "schedule": "0 3 * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/process-reports",
-      "schedule": "0 4 * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }
