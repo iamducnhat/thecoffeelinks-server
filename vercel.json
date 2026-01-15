@@ -13,6 +13,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/cleanup-expired-checkins",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/process-reports",
       "schedule": "0 * * * *"
     }

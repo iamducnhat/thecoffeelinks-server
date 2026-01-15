@@ -39,16 +39,31 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { content, type } = body; // type is usually 'post', 'news', etc.
+        const { content, type } = body;
 
         if (!content) return NextResponse.json({ error: 'Content required' }, { status: 400 });
+        
+        // Validate type - must be one of 4 allowed values
+        const validTypes = ['hiring', 'learning', 'collaboration', 'event_discussion'];
+        if (!type || !validTypes.includes(type)) {
+            return NextResponse.json({ 
+                error: `Type is required and must be one of: ${validTypes.join(', ')}` 
+            }, { status: 400 });
+        }
+        
+        // Validate content length (max 280 characters)
+        if (content.length > 280) {
+            return NextResponse.json({ 
+                error: 'Content exceeds maximum length of 280 characters' 
+            }, { status: 400 });
+        }
 
         const { data, error } = await supabaseAdmin
             .from('posts')
             .insert({
                 user_id: authData.user.id,
                 content,
-                type: type || 'general',
+                type: type,
                 likes: 0,
                 comments: 0
             })

@@ -20,6 +20,9 @@ export async function POST(request: Request) {
         // Support both storeId (Swift app) and locationId (legacy) 
         const storeId = body.storeId || body.locationId;
         const status = body.status || 'available';
+        const intent = body.intent; // networking intent: hiring, learning, collaboration, open_chat
+        const tableNumber = body.tableNumber || body.table_number;
+        const durationMinutes = body.durationMinutes || body.duration_minutes;
 
         // Validate storeId - it's required and must be a valid UUID
         if (!storeId) {
@@ -30,6 +33,22 @@ export async function POST(request: Request) {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (!uuidRegex.test(storeId)) {
             return NextResponse.json({ error: 'Invalid storeId format' }, { status: 400 });
+        }
+        
+        // Validate intent if provided
+        if (intent !== undefined && intent !== null) {
+            const validIntents = ['hiring', 'learning', 'collaboration', 'open_chat'];
+            if (!validIntents.includes(intent)) {
+                return NextResponse.json({ 
+                    error: `Invalid intent. Must be one of: ${validIntents.join(', ')}` 
+                }, { status: 400 });
+            }
+        }
+        
+        // Calculate expires_at if duration is provided
+        let expiresAt = null;
+        if (durationMinutes && durationMinutes > 0) {
+            expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000).toISOString();
         }
 
         // Check out any existing active check-ins first
@@ -50,15 +69,23 @@ export async function POST(request: Request) {
                 store_id: storeId,
                 checked_in_at: new Date().toISOString(),
                 presence_status: status,
-                is_active: true
+                is_active: true,
+                intent: intent || null,
+                table_number: tableNumber || null,
+                duration_minutes: durationMinutes || null,
+                expires_at: expiresAt
             })
             .select(`
                 id,
                 store_id,
                 checked_in_at,
                 presence_status,
+                intent,
+                table_number,
+                duration_minutes,
+                expires_at,
                 user:users (
-                    id, name, full_name, avatar_url, job_title, industry
+                    id, name, full_name, avatar_url, job_title, industry, headline
                 )
             `)
             .single();
@@ -74,13 +101,18 @@ export async function POST(request: Request) {
             storeId: data.store_id,
             checkedInAt: data.checked_in_at,
             presenceStatus: data.presence_status,
+            intent: data.intent,
+            tableNumber: data.table_number,
+            durationMinutes: data.duration_minutes,
+            expiresAt: data.expires_at,
             user: data.user ? {
                 id: (data.user as any).id,
                 name: (data.user as any).name || (data.user as any).full_name,
                 fullName: (data.user as any).full_name,
                 avatarUrl: (data.user as any).avatar_url,
                 jobTitle: (data.user as any).job_title,
-                industry: (data.user as any).industry
+                industry: (data.user as any).industry,
+                headline: (data.user as any).headline
             } : null
         };
 

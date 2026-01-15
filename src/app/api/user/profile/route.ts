@@ -160,7 +160,18 @@ export async function PUT(request: Request) {
         const userId = authData.user.id;
 
         // Whitelist allowed fields to update
-        const allowedFields = ['name', 'job_title', 'industry', 'bio', 'skills', 'linkedin_url', 'is_open_to_networking'];
+        const allowedFields = [
+            'name', 
+            'job_title', 
+            'industry', 
+            'bio', 
+            'skills', 
+            'linkedin_url', 
+            'is_open_to_networking',
+            'headline',
+            'company',
+            'networking_intent'
+        ];
         const updates: any = {};
 
         for (const field of allowedFields) {
@@ -173,6 +184,17 @@ export async function PUT(request: Request) {
         if (body.jobTitle !== undefined) updates.job_title = body.jobTitle;
         if (body.linkedinUrl !== undefined) updates.linkedin_url = body.linkedinUrl;
         if (body.isOpenToNetworking !== undefined) updates.is_open_to_networking = body.isOpenToNetworking;
+        if (body.networkingIntent !== undefined) updates.networking_intent = body.networkingIntent;
+        
+        // Validate networking_intent if provided
+        if (updates.networking_intent !== undefined && updates.networking_intent !== null) {
+            const validIntents = ['hiring', 'learning', 'collaboration', 'open_chat'];
+            if (!validIntents.includes(updates.networking_intent)) {
+                return NextResponse.json({ 
+                    error: `Invalid networking_intent. Must be one of: ${validIntents.join(', ')}` 
+                }, { status: 400 });
+            }
+        }
 
 
         const { error: updateError } = await supabaseAdmin

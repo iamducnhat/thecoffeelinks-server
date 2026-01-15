@@ -25,20 +25,33 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         const storeId = searchParams.get('storeId');
         const limit = parseInt(searchParams.get('limit') || '20');
+        const intent = searchParams.get('intent'); // Filter by networking intent
 
         if (!storeId) {
             return NextResponse.json({ error: 'storeId is required' }, { status: 400 });
         }
+        
+        // Validate intent if provided
+        if (intent) {
+            const validIntents = ['hiring', 'learning', 'collaboration', 'open_chat'];
+            if (!validIntents.includes(intent)) {
+                return NextResponse.json({ 
+                    error: `Invalid intent. Must be one of: ${validIntents.join(', ')}` 
+                }, { status: 400 });
+            }
+        }
 
-        // Get active check-ins at this store, excluding current user
-        // Join with users table to get user profile info
-        const { data: checkIns, error } = await supabaseAdmin
+        // Build query
+        let query = supabaseAdmin
             .from('store_checkins')
             .select(`
                 id,
                 store_id,
                 checked_in_at,
                 presence_status,
+                intent,
+                table_number,
+                expires_at,
                 user:users (
                     id,
                     name,
@@ -47,6 +60,7 @@ export async function GET(request: Request) {
                     job_title,
                     industry,
                     bio,
+                    headline,
                     is_open_to_networking
                 )
             `)
@@ -56,6 +70,16 @@ export async function GET(request: Request) {
             .neq('presence_status', 'invisible')
             .order('checked_in_at', { ascending: false })
             .limit(limit);
+        
+        // Filter by intent if specified
+        if (intent) {
+            query = query.eq('intent', intent);
+        }
+        
+        // Filter out expired check-ins
+        query = query.or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+        
+        const { data: checkIns, error } = await query;
 
         if (error) {
             console.error('Discover users error:', error);
@@ -68,6 +92,9 @@ export async function GET(request: Request) {
             storeId: c.store_id,
             checkedInAt: c.checked_in_at,
             presenceStatus: c.presence_status || 'available',
+            intent: c.intent,
+            tableNumber: c.table_number,
+            expiresAt: c.expires_at,
             user: c.user ? {
                 id: c.user.id,
                 name: c.user.name || c.user.full_name,
@@ -76,6 +103,7 @@ export async function GET(request: Request) {
                 jobTitle: c.user.job_title,
                 industry: c.user.industry,
                 bio: c.user.bio,
+                headline: c.user.headline,
                 isOpenToNetworking: c.user.is_open_to_networking
             } : null
         })).filter((u: any) => u.user !== null) || [];
