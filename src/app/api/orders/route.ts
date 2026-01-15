@@ -4,7 +4,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 /**
  * POST /api/orders
  * 
- * Create a new order. Requires payment verification token.
+ * Create a new order with 30-sec pending state for undo.
+ * Returns status: "pending" with expiresAt timestamp.
  */
 
 // Input validation helpers
@@ -12,14 +13,29 @@ const MAX_ITEMS_PER_ORDER = 50;
 const MAX_QUANTITY_PER_ITEM = 20;
 const MAX_TOTAL_AMOUNT = 50000000; // 50 million VND
 const MIN_TOTAL_AMOUNT = 1000; // 1000 VND minimum
+const DEFAULT_UNDO_WINDOW_SECONDS = 30;
+const MAX_NOTES_PER_ITEM = 3;
+const MAX_NOTE_LENGTH = 140;
+const MAX_ORDERS_PER_PRODUCT_PER_DAY = 3;
+
+// Valid order sources per spec
+const VALID_SOURCES = ['manual', 'ai_suggested', 'reorder', 'favorite'] as const;
+type OrderSource = typeof VALID_SOURCES[number];
+
+// Valid delivery options per spec
+const VALID_DELIVERY_OPTIONS = ['pickup', 'dine_in', 'delivery'] as const;
+type DeliveryOption = typeof VALID_DELIVERY_OPTIONS[number];
 
 interface OrderItemInput {
     product?: { name?: string; id?: string };
+    product_id?: string;
     product_name?: string;
     quantity?: number;
     finalPrice?: number;
     price?: number;
     customization?: Record<string, unknown>;
+    notes?: string[];
+    is_favorite?: boolean;
 }
 
 function validateOrderItems(items: OrderItemInput[]): { valid: boolean; error?: string } {
@@ -50,6 +66,24 @@ function validateOrderItems(items: OrderItemInput[]): { valid: boolean; error?: 
         const quantity = item.quantity;
         if (typeof quantity !== 'number' || quantity < 1 || quantity > MAX_QUANTITY_PER_ITEM) {
             return { valid: false, error: `Item ${i + 1}: Quantity must be between 1 and ${MAX_QUANTITY_PER_ITEM}` };
+        }
+        
+        // Validate notes per spec: max 3 notes, max 140 chars each
+        if (item.notes) {
+            if (!Array.isArray(item.notes)) {
+                return { valid: false, error: `Item ${i + 1}: Notes must be an array` };
+            }
+            if (item.notes.length > MAX_NOTES_PER_ITEM) {
+                return { valid: false, error: `Item ${i + 1}: Maximum ${MAX_NOTES_PER_ITEM} notes per item` };
+            }
+            for (let j = 0; j < item.notes.length; j++) {
+                if (typeof item.notes[j] !== 'string') {
+                    return { valid: false, error: `Item ${i + 1}: Note ${j + 1} must be a string` };
+                }
+                if (item.notes[j].length > MAX_NOTE_LENGTH) {
+                    return { valid: false, error: `Item ${i + 1}: Note ${j + 1} exceeds ${MAX_NOTE_LENGTH} characters` };
+                }
+            }
         }
         
         const price = item.finalPrice || item.price;
@@ -93,16 +127,19 @@ export async function POST(request: Request) {
         }
         
         const body = await request.json();
-        // Support prompt payload keys + legacy keys
+        // Support prompt payload keys + legacy keys + new spec fields
         const {
             items,
             order_type, deliveryOption,
             table_id,
-            address_id, deliveryAddress,
+            address_id, deliveryAddress, deliveryAddressId,
             payment_method, paymentMethod,
+            paymentToken, // Payment verification token
             voucher_id,
             user_id, // Client-provided user_id
-            total_amount, total
+            total_amount, total,
+            source = 'manual', // Order source: manual, ai_suggested, reorder, favorite
+            storeId,
         } = body;
         
         // Security: If user_id is provided in body, it MUST match authenticated user
@@ -115,6 +152,13 @@ export async function POST(request: Request) {
                 }, { status: 403 });
             }
             finalUserId = user_id;
+        }
+
+        // Validate source per spec
+        if (!VALID_SOURCES.includes(source)) {
+            return NextResponse.json({ 
+                error: `Invalid source. Valid options: ${VALID_SOURCES.join(', ')}` 
+            }, { status: 400 });
         }
 
         // Validate items
@@ -133,14 +177,20 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Order amount exceeds maximum limit' }, { status: 400 });
         }
 
-        // Determine Type
-        let type = order_type || (deliveryOption === 'delivery' || deliveryOption === 'take-away' ? 'take_away' : 'dine_in');
-        if (type === 'take-away') type = 'take_away';
-        
-        const validTypes = ['dine_in', 'take_away', 'delivery'];
-        if (!validTypes.includes(type)) {
-            return NextResponse.json({ error: 'Invalid order type' }, { status: 400 });
+        // Determine delivery option per spec
+        let deliveryOptionValue: DeliveryOption = 'pickup';
+        const rawDeliveryOption = deliveryOption || order_type;
+        if (rawDeliveryOption === 'delivery') {
+            deliveryOptionValue = 'delivery';
+        } else if (rawDeliveryOption === 'dine_in' || rawDeliveryOption === 'dine-in') {
+            deliveryOptionValue = 'dine_in';
+        } else if (rawDeliveryOption === 'pickup' || rawDeliveryOption === 'take_away' || rawDeliveryOption === 'take-away') {
+            deliveryOptionValue = 'pickup';
         }
+
+        // Legacy type mapping for backward compatibility
+        let type = deliveryOptionValue === 'delivery' ? 'take_away' : 
+                   deliveryOptionValue === 'dine_in' ? 'dine_in' : 'take_away';
 
         // Payment Verification
         const validPaymentMethods = ['card', 'momo', 'zalopay', 'apple_pay', 'points'];
@@ -159,7 +209,8 @@ export async function POST(request: Request) {
         }
 
         // Validate delivery address is required for delivery orders
-        if (type === 'delivery' && !deliveryAddress) {
+        const finalAddressId = deliveryAddressId || address_id;
+        if (deliveryOptionValue === 'delivery' && !deliveryAddress && !finalAddressId) {
             return NextResponse.json({ error: 'Delivery address is required for delivery orders' }, { status: 400 });
         }
         
@@ -168,43 +219,83 @@ export async function POST(request: Request) {
             ? deliveryAddress.slice(0, 500) 
             : null;
 
-        // Auto-save delivery address for authenticated users
-        if (sanitizedAddress && finalUserId) {
+        // Calculate delivery fee and ETA if delivery order
+        let deliveryFee = 0;
+        let deliveryEtaMinutes: number | null = null;
+        
+        if (deliveryOptionValue === 'delivery' && finalAddressId && storeId) {
             try {
-                // Check if address already exists
-                const { data: existingAddress } = await supabaseAdmin
+                // Get address coordinates
+                const { data: addressData } = await supabaseAdmin
                     .from('addresses')
-                    .select('id')
-                    .eq('user_id', finalUserId)
-                    .eq('address', sanitizedAddress)
-                    .maybeSingle();
-
-                // Save address if it doesn't exist
-                if (!existingAddress) {
-                    await supabaseAdmin
-                        .from('addresses')
-                        .insert({
-                            user_id: finalUserId,
-                            address: sanitizedAddress
+                    .select('latitude, longitude')
+                    .eq('id', finalAddressId)
+                    .single();
+                
+                if (addressData?.latitude && addressData?.longitude) {
+                    // Check delivery zone and calculate fee
+                    const { data: zoneData } = await supabaseAdmin
+                        .rpc('check_delivery_zone', {
+                            p_store_id: storeId,
+                            p_latitude: addressData.latitude,
+                            p_longitude: addressData.longitude
                         });
+                    
+                    if (zoneData && zoneData.length > 0) {
+                        deliveryFee = zoneData[0].total_fee || 0;
+                        deliveryEtaMinutes = zoneData[0].eta_minutes || 30;
+                    }
+                    
+                    // Increment address usage
+                    await supabaseAdmin.rpc('increment_address_usage', { address_id: finalAddressId });
                 }
-            } catch (addressError) {
-                // Don't fail order if address save fails, just log it
-                console.error('Failed to save address:', addressError);
+            } catch (deliveryError) {
+                console.error('Delivery calculation error:', deliveryError);
+                // Use defaults
+                deliveryEtaMinutes = 30;
             }
         }
 
-        // Build order data
+        // Check if any item has notes (for has_notes flag)
+        const hasNotes = items.some((item: OrderItemInput) => item.notes && item.notes.length > 0);
+
+        // Get undo window duration from config (default 30 seconds)
+        let undoWindowSeconds = DEFAULT_UNDO_WINDOW_SECONDS;
+        try {
+            const { data: configData } = await supabaseAdmin
+                .from('system_config')
+                .select('value')
+                .eq('key', 'undo_window_seconds')
+                .single();
+            if (configData?.value) {
+                undoWindowSeconds = parseInt(configData.value, 10) || DEFAULT_UNDO_WINDOW_SECONDS;
+            }
+        } catch {
+            // Use default
+        }
+
+        // Calculate pending_until timestamp
+        const pendingUntil = new Date();
+        pendingUntil.setSeconds(pendingUntil.getSeconds() + undoWindowSeconds);
+
+        // Build order data with new fields per spec
         const orderData: Record<string, any> = {
-            user_id: finalUserId || null, // Use validated user ID
-            status: 'received',
+            user_id: finalUserId || null,
+            status: 'pending', // NEW: Start in pending state
+            pending_until: pendingUntil.toISOString(), // NEW: Undo window expiry
             total_amount: orderTotal,
             type: type,
+            delivery_option: deliveryOptionValue, // NEW: Per spec
             payment_method: selectedPayment,
             payment_status: 'pending',
-            store_id: body.storeId || null,
+            store_id: storeId || null,
             table_id: table_id || null,
-            voucher_id: voucher_id || null
+            voucher_id: voucher_id || null,
+            source: source as OrderSource, // NEW: Track order origin
+            has_notes: hasNotes, // NEW: Quick filter for staff
+            delivery_address_id: finalAddressId || null, // NEW: FK to addresses
+            delivery_fee: deliveryFee, // NEW: Calculated fee
+            delivery_eta_minutes: deliveryEtaMinutes, // NEW: Calculated ETA
         };
 
         // Add optional fields only if they exist
@@ -223,14 +314,16 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: orderError.message }, { status: 500 });
         }
 
-        // Insert Items
-        // Flatten customization to JSON
-        const orderItems = items.map((item: any) => ({
+        // Insert Items with new fields per spec
+        const orderItems = items.map((item: OrderItemInput) => ({
             order_id: order.id,
-            product_name: item.product.name, // or item.product_name
+            product_id: item.product?.id || item.product_id || null, // NEW: For popularity tracking
+            product_name: item.product?.name || item.product_name,
             final_price: item.finalPrice || item.price,
             quantity: item.quantity,
-            options_snapshot_json: item.customization, // Stores the full customization object
+            options_snapshot_json: item.customization,
+            notes: item.notes || null, // NEW: User notes array
+            is_favorite: item.is_favorite || false, // NEW: From favorites flag
         }));
 
         const { error: itemsError } = await supabaseAdmin
@@ -242,21 +335,25 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: itemsError.message }, { status: 500 });
         }
 
-        // Estimate ready time (mock logic)
+        // Calculate estimated ready time
         const estimatedReadyAt = new Date();
-        estimatedReadyAt.setMinutes(estimatedReadyAt.getMinutes() + 15);
+        const baseMinutes = deliveryOptionValue === 'delivery' ? (deliveryEtaMinutes || 30) : 15;
+        estimatedReadyAt.setMinutes(estimatedReadyAt.getMinutes() + baseMinutes);
 
-        // Return full order object for Swift app compatibility
+        // Return response per spec: status "pending" with expiresAt
         return NextResponse.json({
             success: true,
+            orderId: order.id,
+            status: 'pending', // Per spec: NOT "placed"
+            expiresAt: pendingUntil.toISOString(), // Per spec: now + 30 seconds
+            estimatedReadyTime: estimatedReadyAt.toISOString(),
+            // Include full order for backward compatibility
             order: {
                 ...order,
                 items: orderItems,
                 estimated_ready_at: estimatedReadyAt.toISOString()
             },
-            order_id: order.id,
-            status: order.status,
-            estimated_ready_at: estimatedReadyAt.toISOString()
+            order_id: order.id, // Legacy field
         });
     } catch (error: any) {
         console.error('Server error:', error);

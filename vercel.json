@@ -1,0 +1,20 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/finalize-orders",
+      "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/cron/update-popularity",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-presence",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/process-reports",
+      "schedule": "0 * * * *"
+    }
+  ]
+}
