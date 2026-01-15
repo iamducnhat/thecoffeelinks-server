@@ -168,5 +168,4 @@ function getSourceBadge(source: string): { label: string; color: string; icon: s
             return { label: 'Manual', color: 'gray', icon: '' };
     }
 }
-}
 
