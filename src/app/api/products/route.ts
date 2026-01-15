@@ -20,6 +20,8 @@ interface Product {
     is_popular: boolean;
     is_new: boolean;
     is_available: boolean;
+    is_deliverable: boolean;
+    delivery_prep_minutes: number;
     size_options: any; // Ideally stricter type
     available_toppings: string[];
 }
@@ -29,6 +31,7 @@ export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const categoryParam = searchParams.get('category');
+        const deliverableOnly = searchParams.get('deliverable') === 'true';
 
         // Build query - including image field for display
         let query = supabaseAdmin
@@ -47,8 +50,15 @@ export async function GET(request: Request) {
                 is_new, 
                 is_available,
                 size_options,
-                available_toppings
+                available_toppings,
+                is_deliverable,
+                delivery_prep_minutes
             `);
+
+        // Filter for deliverable products only (delivery mode)
+        if (deliverableOnly) {
+            query = query.eq('is_deliverable', true);
+        }
 
         // Filter by category if provided
         if (categoryParam && categoryParam !== 'all') {
@@ -74,7 +84,9 @@ export async function GET(request: Request) {
                         is_new, 
                         is_available,
                         size_options,
-                        available_toppings
+                        available_toppings,
+                        is_deliverable,
+                        delivery_prep_minutes
                     `)
                     .eq('categories.name', categoryParam);
             }
@@ -127,6 +139,8 @@ export async function GET(request: Request) {
                 is_popular: p.is_popular,
                 is_new: p.is_new,
                 is_available: p.is_available,
+                is_deliverable: p.is_deliverable ?? true,
+                deliveryPrepMinutes: p.delivery_prep_minutes ?? 10,
                 availableToppings: p.available_toppings || [],
                 sizeOptions: p.size_options || DEFAULT_SIZE_OPTIONS,
             };

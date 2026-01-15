@@ -97,6 +97,81 @@ function validateOrderItems(items: OrderItemInput[]): { valid: boolean; error?: 
     return { valid: true };
 }
 
+// Validate all items are deliverable (for delivery orders)
+async function validateDeliverableItems(items: OrderItemInput[]): Promise<{ valid: boolean; error?: string }> {
+    const productIds = items
+        .map(item => item.product?.id || item.product_id)
+        .filter((id): id is string => !!id);
+
+    if (productIds.length === 0) {
+        // No product IDs to validate - skip check
+        return { valid: true };
+    }
+
+    const { data: products, error } = await supabaseAdmin
+        .from('products')
+        .select('id, name, is_deliverable')
+        .in('id', productIds);
+
+    if (error) {
+        console.error('Deliverable check error:', error);
+        return { valid: true }; // Don't block on error
+    }
+
+    const nonDeliverable = products?.filter(p => p.is_deliverable === false);
+    if (nonDeliverable && nonDeliverable.length > 0) {
+        const names = nonDeliverable.map(p => p.name).join(', ');
+        return {
+            valid: false,
+            error: `These items are not available for delivery: ${names}`
+        };
+    }
+
+    return { valid: true };
+}
+
+// Validate store accepts delivery at current time
+async function validateStoreDelivery(storeId: string, orderTotal: number): Promise<{ valid: boolean; error?: string; minAmount?: number }> {
+    const { data: store, error } = await supabaseAdmin
+        .from('stores')
+        .select('delivery_enabled, delivery_hours_start, delivery_hours_end, min_delivery_amount')
+        .eq('id', storeId)
+        .single();
+
+    if (error || !store) {
+        // Store not found or no delivery settings - allow order
+        return { valid: true };
+    }
+
+    if (!store.delivery_enabled) {
+        return { valid: false, error: 'This store does not accept delivery orders' };
+    }
+
+    // Check delivery hours
+    if (store.delivery_hours_start && store.delivery_hours_end) {
+        const now = new Date();
+        const currentTime = now.toTimeString().slice(0, 5);
+        if (currentTime < store.delivery_hours_start || currentTime > store.delivery_hours_end) {
+            return {
+                valid: false,
+                error: `Delivery available ${store.delivery_hours_start} - ${store.delivery_hours_end}`
+            };
+        }
+    }
+
+    // Check minimum order amount
+    if (store.min_delivery_amount && orderTotal < store.min_delivery_amount) {
+        const shortfall = store.min_delivery_amount - orderTotal;
+        return {
+            valid: false,
+            error: `Add ${shortfall.toLocaleString()}đ more for delivery (minimum: ${store.min_delivery_amount.toLocaleString()}đ)`,
+            minAmount: store.min_delivery_amount
+        };
+    }
+
+    return { valid: true };
+}
+
 // Helper to extract and validate user from auth token
 async function getAuthenticatedUserId(request: Request): Promise<{ userId: string | null; error?: string }> {
     const authHeader = request.headers.get('Authorization');
@@ -188,6 +263,26 @@ export async function POST(request: Request) {
             deliveryOptionValue = 'dine_in';
         } else if (rawDeliveryOption === 'pickup' || rawDeliveryOption === 'take_away' || rawDeliveryOption === 'take-away') {
             deliveryOptionValue = 'pickup';
+        }
+
+        // NEW: Validate delivery-specific constraints
+        if (deliveryOptionValue === 'delivery') {
+            // Validate all items are deliverable
+            const deliverableValidation = await validateDeliverableItems(items);
+            if (!deliverableValidation.valid) {
+                return NextResponse.json({ error: deliverableValidation.error }, { status: 400 });
+            }
+
+            // Validate store accepts delivery
+            if (storeId) {
+                const storeDeliveryValidation = await validateStoreDelivery(storeId, orderTotal);
+                if (!storeDeliveryValidation.valid) {
+                    return NextResponse.json({
+                        error: storeDeliveryValidation.error,
+                        minAmount: storeDeliveryValidation.minAmount
+                    }, { status: 400 });
+                }
+            }
         }
 
         // Legacy type mapping for backward compatibility
