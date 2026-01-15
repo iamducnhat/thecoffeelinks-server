@@ -7,9 +7,10 @@ import { supabaseAdmin } from '@/lib/supabase';
  */
 export async function PUT(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params;
         const authHeader = request.headers.get('Authorization');
         if (!authHeader) {
             return NextResponse.json({ error: 'No authorization header' }, { status: 401 });
@@ -23,7 +24,7 @@ export async function PUT(
         }
 
         const userId = authData.user.id;
-        const favoriteId = params.id;
+        const favoriteId = id;
         const body = await request.json();
         const { customization, notes } = body;
 
@@ -83,9 +84,10 @@ export async function PUT(
  */
 export async function DELETE(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params;
         const authHeader = request.headers.get('Authorization');
         if (!authHeader) {
             return NextResponse.json({ error: 'No authorization header' }, { status: 401 });
@@ -99,7 +101,7 @@ export async function DELETE(
         }
 
         const userId = authData.user.id;
-        const favoriteId = params.id;
+        const favoriteId = id;
 
         // Delete favorite (user_id check ensures user can only delete their own favorites)
         const { error } = await supabaseAdmin
@@ -121,6 +123,6 @@ export async function DELETE(
     }
 }
 
-export async function PATCH(request: Request, context: { params: { id: string } }) {
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
     return PUT(request, context);
 }
