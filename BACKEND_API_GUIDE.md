@@ -270,6 +270,82 @@ Admin authentication using encrypted credentials.
 
 ---
 
+### POST `/api/auth/linkedin`
+
+LinkedIn OAuth2 authentication using OpenID Connect.
+
+**Auth Required**: No
+
+**Request Body**:
+```json
+{
+  "code": "linkedin_authorization_code",
+  "redirect_uri": "your_app_redirect_uri"
+}
+```
+
+**Required Fields**:
+- `code`: Authorization code from LinkedIn OAuth flow
+- `redirect_uri`: Must match the redirect URI configured in LinkedIn app
+
+**Response** (200):
+```json
+{
+  "success": true,
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "full_name": "John Doe",
+    "avatar_url": "https://media.licdn.com/...",
+    "is_new_user": true
+  },
+  "auth_url": "https://server-nu-three-90.vercel.app/auth/confirm?token=...",
+  "message": "Use auth_url to complete authentication"
+}
+```
+
+**Features**:
+- OpenID Connect integration with ID tokens
+- Automatic account linking by email
+- New user creation with 50 bonus points
+- Profile data extraction (name, email, avatar)
+- Supabase auth session generation
+
+**Error Responses**:
+- `400`: Missing code or redirect_uri
+- `400`: Failed to authenticate with LinkedIn
+- `503`: LinkedIn authentication not configured
+
+---
+
+### GET `/api/auth/session`
+
+Validate current user session.
+
+**Auth Required**: Yes (Bearer token)
+
+**Response** (200):
+```json
+{
+  "valid": true,
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "full_name": "John Doe"
+  }
+}
+```
+
+**Response** (401):
+```json
+{
+  "valid": false,
+  "error": "Invalid session"
+}
+```
+
+---
+
 ## Categories
 
 ### GET `/api/categories`
