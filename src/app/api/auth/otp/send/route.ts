@@ -10,18 +10,8 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Phone number is required' }, { status: 400 });
         }
 
-        // Check PAYMENT_MODE for bypass
-        const mode = process.env.PAYMENT_MODE?.toLowerCase();
-
-        if (mode === 'bypass') {
-            // Development bypass: don't send actual SMS
-            console.log(`🔓 [OTP Bypass] Would send OTP to ${phone}`);
-            return NextResponse.json({
-                success: true,
-                message: 'OTP bypass mode - no SMS sent',
-                bypass: true
-            });
-        }
+        // We strictly use supabaseAdmin to send OTP. 
+        // This requires Supabase Project to have Phone Provider (Twilio/MessageBird) configured.
 
         // Clean phone number: remove non-numeric chars, ensure it has country code if needed or rely on Supabase defaults
         // For now assuming the client sends E.164 or locally usable format. 
